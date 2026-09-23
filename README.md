@@ -1,10 +1,10 @@
-# Smart Technology — Salesman Mobile Ledger
+# Login Smart Technology — Salesman Mobile Ledger
 
-A production-ready, **offline-first mobile ledger management application** built specifically for salesmen representing **Smart Technology**.
+A production-ready, **offline-first mobile ledger management application** built specifically for salesmen representing **Login Smart Technology**.
 
 The application manages ledgers and accounts while keeping two distinct financial balances completely separated:
 1. **Market / Party Receivables**: Money to be collected from customer shops.
-2. **Company Payables**: Money payable / deposited to Smart Technology against referenced company invoices.
+2. **Company Payables**: Money payable / deposited to Login Smart Technology against referenced company invoices.
 
 ---
 
@@ -34,7 +34,7 @@ The application manages ledgers and accounts while keeping two distinct financia
 1. **Dashboard**:
    - 4 Primary Summary Cards:
      - **Market Receivable** (total outstanding from all shops)
-     - **Company Payable** (total outstanding to Smart Technology)
+     - **Company Payable** (total outstanding to Login Smart Technology)
      - **Today's Recovery** (payments collected from parties today)
      - **Today's Company Payment** (deposits made to the company today)
    - Quick Salesman action shortcuts (`Add Party`, `Add Invoice`, `Receive Rs`, `Pay Company`).
@@ -52,7 +52,7 @@ The application manages ledgers and accounts while keeping two distinct financia
    - Chronological ledger list showing Date, Description, Debit (+), Credit (-), and Running Balance.
    - Inline edit and delete capabilities with automatic balance recalculation.
 
-4. **Company Section (Smart Technology)**:
+4. **Company Section (Login Smart Technology)**:
    - Total Company Liability, Total Paid, and Outstanding due to company.
    - `+ Pay Company` button to record bank deposits or cash handovers.
    - Traceable records: Referenced Invoices tab vs Company Deposits tab.

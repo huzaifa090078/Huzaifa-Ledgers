@@ -85,7 +85,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
           <div className="flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-indigo-600" />
             <h2 className="text-base font-semibold text-slate-800 m-0">
-              {editingPayment ? 'Edit Company Payment' : 'Pay / Deposit to Smart Technology'}
+              {editingPayment ? 'Edit Company Payment' : 'Pay / Deposit to Login Smart Technology'}
             </h2>
           </div>
           <button
@@ -107,7 +107,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
           <div className="flex items-start p-3 bg-indigo-50/80 border border-indigo-200/80 rounded-lg text-xs text-indigo-950">
             <Info className="w-4 h-4 text-indigo-600 mr-2 shrink-0 mt-0.5" />
             <span>
-              <strong>Rule:</strong> Depositing money to Smart Technology reduces only your <strong>Amount Payable to the company</strong>. It does <strong>NOT</strong> reduce any party's Amount Due.
+              <strong>Rule:</strong> Depositing money to Login Smart Technology reduces only your <strong>Amount Payable to the company</strong>. It does <strong>NOT</strong> reduce any party's Amount Due.
             </span>
           </div>
 

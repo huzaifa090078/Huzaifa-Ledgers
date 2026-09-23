@@ -78,7 +78,7 @@ export function generatePartyLedgerPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text('SMART TECHNOLOGY', 14, 12);
+  doc.text('LOGIN SMART TECHNOLOGY', 14, 12);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -207,7 +207,7 @@ export function generatePartyLedgerPDF(
       doc.setTextColor(148, 163, 184);
       doc.setFont('helvetica', 'normal');
       doc.text(
-        `Page ${data.pageNumber} • Smart Technology Ledger`,
+        `Page ${data.pageNumber} • Login Smart Technology Ledger`,
         105,
         290,
         { align: 'center' }
@@ -423,7 +423,7 @@ export function generateDailyCollectionPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text('SMART TECHNOLOGY', 14, 12);
+  doc.text('LOGIN SMART TECHNOLOGY', 14, 12);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -568,7 +568,7 @@ export function generateDailyCollectionPDF(
     doc.setTextColor(148, 163, 184);
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `Page ${i} of ${pageCount} • Smart Technology Salesman Daily Ledger`,
+      `Page ${i} of ${pageCount} • Login Smart Technology Salesman Daily Ledger`,
       105,
       290,
       { align: 'center' }

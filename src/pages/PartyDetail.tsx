@@ -255,15 +255,13 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              setIsExportModalOpen(true);
-            }}
+            onClick={() => handleShareWhatsApp()}
             disabled={sharing}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-sky-50 hover:bg-sky-100 active:bg-sky-200 text-sky-900 border border-sky-200 transition disabled:opacity-50"
           >
             <Share2 className="w-4 h-4 text-sky-700 mb-1" />
             <span className="text-[10px] font-semibold">
-              {sharing ? 'Sharing...' : 'WhatsApp'}
+              {sharing ? 'Sharing...' : 'Share'}
             </span>
           </button>
         </div>

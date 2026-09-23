@@ -252,7 +252,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
           <div className="flex items-center space-x-1.5">
             <Building2 className="w-4 h-4 text-indigo-600" />
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider m-0">
-              Smart Technology Position
+              Login Smart Technology Position
             </h3>
           </div>
           <span className="text-[10px] text-slate-400">Company Account</span>

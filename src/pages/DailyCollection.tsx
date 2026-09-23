@@ -776,7 +776,7 @@ export const DailyCollection: React.FC<DailyCollectionProps> = ({
             <div className="flex items-center justify-between py-1.5 border-b border-slate-100 bg-indigo-50/50 px-2 rounded">
               <span className="text-indigo-900 font-semibold flex items-center">
                 <Building2 className="w-3.5 h-3.5 mr-1 text-indigo-600" />
-                Paid to Company (Smart Technology)
+                Paid to Company (Login Smart Technology)
               </span>
               <span className="font-bold text-indigo-700 font-mono">
                 {formatPKR(reconciliation.todayCompanyPayment)}

@@ -71,7 +71,7 @@ export const Company: React.FC<CompanyProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight m-0">
-                Smart Technology
+                Login Smart Technology
               </h2>
               <span className="text-[10px] text-indigo-300 font-medium">
                 Company Amount Payable Account
@@ -238,7 +238,7 @@ export const Company: React.FC<CompanyProps> = ({
               <Receipt className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-xs font-semibold text-slate-600 mb-1">No Company Payments Recorded</p>
               <p className="text-[11px] text-slate-400 max-w-xs mx-auto mb-3">
-                Record payments made to Smart Technology against your orders.
+                Record payments made to Login Smart Technology against your orders.
               </p>
               <button
                 onClick={onOpenRecordPayment}

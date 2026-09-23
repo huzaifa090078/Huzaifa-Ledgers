@@ -456,7 +456,7 @@ export function getRecentTransactions(
       id: `cpmt-${cpmt.id}`,
       date: cpmt.date,
       timestamp: cpmt.createdAt || cpmt.date,
-      title: 'Smart Technology',
+      title: 'Login Smart Technology',
       subtitle: `Company Paid via ${cpmt.paymentMethod}${cpmt.reference ? ` • Receipt: ${cpmt.reference}` : ''}`,
       amount: cpmt.amount,
       type: 'company_payment',

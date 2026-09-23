@@ -42,7 +42,7 @@ export async function initializeSettings(): Promise<AppSettings> {
   const defaultSettings: AppSettings = {
     id: 'default',
     salesmanName: 'Sales Representative',
-    companyName: 'Smart Technology',
+    companyName: 'Login Smart Technology',
     currencySymbol: 'Rs',
     updatedAt: new Date().toISOString(),
   };

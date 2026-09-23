@@ -124,7 +124,7 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
           <div className="flex items-start p-3 bg-amber-50/80 border border-amber-200/80 rounded-lg text-xs text-amber-900">
             <AlertCircle className="w-4 h-4 text-amber-600 mr-2 shrink-0 mt-0.5" />
             <span>
-              This company invoice increases the <strong>Party's Amount Due</strong> and increases your <strong>Amount Payable to Smart Technology</strong>.
+              This company invoice increases the <strong>Party's Amount Due</strong> and increases your <strong>Amount Payable to Login Smart Technology</strong>.
             </span>
           </div>
 

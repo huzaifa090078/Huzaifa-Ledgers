@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Smart Technology Ledger</string>
-    <string name="title_activity_main">Smart Technology Ledger</string>
+    <string name="app_name">Login Smart Technology Ledger</string>
+    <string name="title_activity_main">Login Smart Technology Ledger</string>
     <string name="package_name">com.smarttech.ledger</string>
     <string name="custom_url_scheme">com.smarttech.ledger</string>
 </resources>

@@ -261,7 +261,7 @@ export const App: React.FC = () => {
       isOpen: true,
       title: 'Delete Company Invoice',
       message: `Are you sure you want to delete Invoice #${invoice.invoiceNumber} (Rs ${invoice.amount.toLocaleString()})?`,
-      warningNote: 'Deleting this invoice will automatically reduce the party Amount Due and reduce your Amount Payable to Smart Technology.',
+      warningNote: 'Deleting this invoice will automatically reduce the party Amount Due and reduce your Amount Payable to Login Smart Technology.',
       action: async () => {
         await db.invoices.delete(invoice.id);
       },
@@ -316,7 +316,7 @@ export const App: React.FC = () => {
     setDeleteModalState({
       isOpen: true,
       title: 'Delete Company Payment',
-      message: `Are you sure you want to delete this deposit of Rs ${payment.amount.toLocaleString()} paid to Smart Technology?`,
+      message: `Are you sure you want to delete this deposit of Rs ${payment.amount.toLocaleString()} paid to Login Smart Technology?`,
       warningNote: 'This will increase your Amount Payable to the company. Party Amount Due will remain unaffected.',
       action: async () => {
         await db.companyPayments.delete(payment.id);

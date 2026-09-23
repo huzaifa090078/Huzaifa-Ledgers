@@ -197,7 +197,7 @@ export const Settings: React.FC<SettingsProps> = ({
         amount: 15000,
         paymentMethod: 'Bank',
         reference: 'HBL-DEP-4912',
-        note: 'Salesman deposit to Smart Tech company account',
+        note: 'Salesman deposit to Login Smart Technology company account',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -369,7 +369,7 @@ export const Settings: React.FC<SettingsProps> = ({
           • The app works 100% without an internet connection.
         </p>
         <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-200 flex items-center justify-between">
-          <span>Smart Technology Business Ledger v1.0.0</span>
+          <span>Login Smart Technology Business Ledger v1.0.0</span>
           <span>Offline PWA</span>
         </div>
       </div>

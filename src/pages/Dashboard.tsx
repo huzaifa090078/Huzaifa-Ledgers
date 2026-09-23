@@ -133,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-[10px] uppercase tracking-wider text-sky-400 font-semibold">
-              Smart Technology Salesman
+              Login Smart Technology Salesman
             </span>
             <h2 className="text-base font-bold text-white tracking-tight m-0">
               Financial Overview
@@ -191,7 +191,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {formatPKR(analytics.companyOutstanding)}
           </div>
           <p className="text-[10px] text-slate-400 mt-1 m-0">
-            Due to Smart Technology
+            Due to Login Smart Technology
           </p>
         </div>
 

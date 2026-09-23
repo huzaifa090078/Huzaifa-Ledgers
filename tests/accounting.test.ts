@@ -8,7 +8,7 @@ import {
   getPartyLedgerTimeline,
 } from '../src/services/accounting';
 
-describe('Smart Technology Ledger - Accounting Engine Tests', () => {
+describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
   describe('Rule 26: Section 26 Acceptance Scenario Verification', () => {
     it('executes the full step-by-step acceptance workflow and strictly matches expected balances', () => {
       // Setup parties
@@ -249,7 +249,7 @@ describe('Smart Technology Ledger - Accounting Engine Tests', () => {
       const { validateBackupPayload } = await import('../src/services/backup');
       const validPayload = {
         version: 1,
-        appName: 'Smart Technology',
+        appName: 'Login Smart Technology',
         exportedAt: '2026-09-21T12:00:00Z',
         parties: [],
         invoices: [],
