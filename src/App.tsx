@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { db } from './db';
 import type { Party, PartyInvoice, PartyPayment, CompanyPayment, DailyReconciliation } from './types';
 import type { NavTab } from './components/BottomNav';
@@ -61,6 +63,142 @@ export const App: React.FC = () => {
     message: '',
     action: async () => {},
   });
+
+  // Navigation history stack: keeps track of screens { tab, partyId }
+  const navHistoryRef = useRef<Array<{ tab: NavTab; partyId: string | null }>>([
+    { tab: 'dashboard', partyId: null },
+  ]);
+
+  // Keep latest mutable state in a ref to avoid stale closures in event listeners
+  const stateRef = useRef({
+    activeTab,
+    selectedPartyId,
+    isPartyModalOpen,
+    isInvoiceModalOpen,
+    isPartyPaymentModalOpen,
+    isCompanyPaymentModalOpen,
+    deleteModalOpen: deleteModalState.isOpen,
+  });
+
+  stateRef.current = {
+    activeTab,
+    selectedPartyId,
+    isPartyModalOpen,
+    isInvoiceModalOpen,
+    isPartyPaymentModalOpen,
+    isCompanyPaymentModalOpen,
+    deleteModalOpen: deleteModalState.isOpen,
+  };
+
+  const pushHistory = useCallback((tab: NavTab, partyId: string | null) => {
+    const history = navHistoryRef.current;
+    const last = history[history.length - 1];
+    if (!last || last.tab !== tab || last.partyId !== partyId) {
+      history.push({ tab, partyId });
+      if (!Capacitor.isNativePlatform() && typeof window !== 'undefined' && window.history) {
+        window.history.pushState({ tab, partyId }, '');
+      }
+    }
+  }, []);
+
+  const handleTabChange = useCallback((newTab: NavTab) => {
+    setSelectedPartyId(null);
+    setActiveTab(newTab);
+    pushHistory(newTab, null);
+  }, [pushHistory]);
+
+  const handleSelectParty = useCallback((partyId: string) => {
+    setSelectedPartyId(partyId);
+    pushHistory(stateRef.current.activeTab, partyId);
+  }, [pushHistory]);
+
+  const handleBack = useCallback((): boolean => {
+    // 1. Dispatch custom event for child components with local dialogs
+    const event = new CustomEvent('app:back', { cancelable: true });
+    window.dispatchEvent(event);
+    if (event.defaultPrevented) {
+      return true;
+    }
+
+    // 2. Check open modals in App (highest overlay to lowest)
+    if (stateRef.current.deleteModalOpen) {
+      setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+      return true;
+    }
+    if (stateRef.current.isPartyModalOpen) {
+      setIsPartyModalOpen(false);
+      return true;
+    }
+    if (stateRef.current.isInvoiceModalOpen) {
+      setIsInvoiceModalOpen(false);
+      return true;
+    }
+    if (stateRef.current.isPartyPaymentModalOpen) {
+      setIsPartyPaymentModalOpen(false);
+      return true;
+    }
+    if (stateRef.current.isCompanyPaymentModalOpen) {
+      setIsCompanyPaymentModalOpen(false);
+      return true;
+    }
+
+    // 3. Check navigation history
+    const history = navHistoryRef.current;
+    if (history.length > 1) {
+      history.pop(); // Remove current screen
+      const previous = history[history.length - 1];
+      setActiveTab(previous.tab);
+      setSelectedPartyId(previous.partyId);
+      return true;
+    }
+
+    // 4. If viewing party details without history stack, return to list
+    if (stateRef.current.selectedPartyId) {
+      setSelectedPartyId(null);
+      return true;
+    }
+
+    // 5. If on another tab, return to Dashboard first before exit
+    if (stateRef.current.activeTab !== 'dashboard') {
+      setActiveTab('dashboard');
+      setSelectedPartyId(null);
+      navHistoryRef.current = [{ tab: 'dashboard', partyId: null }];
+      return true;
+    }
+
+    // 6. Already at root Dashboard with no modals and no history -> exit
+    return false;
+  }, []);
+
+  useEffect(() => {
+    let backListener: { remove: () => void } | null = null;
+
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener('backButton', () => {
+        const handled = handleBack();
+        if (!handled) {
+          CapacitorApp.exitApp();
+        }
+      }).then((listener) => {
+        backListener = listener;
+      });
+    } else {
+      // Browser environment back navigation support
+      const onPopState = () => {
+        handleBack();
+      };
+      window.addEventListener('popstate', onPopState);
+      return () => {
+        window.removeEventListener('popstate', onPopState);
+      };
+    }
+
+    return () => {
+      if (backListener) {
+        backListener.remove();
+      }
+    };
+  }, [handleBack]);
 
   // Selected Party object if in party detail view
   const selectedParty = selectedPartyId ? parties.find((p) => p.id === selectedPartyId) : null;
@@ -201,7 +339,7 @@ export const App: React.FC = () => {
             party={selectedParty}
             invoices={invoices}
             partyPayments={partyPayments}
-            onBack={() => setSelectedPartyId(null)}
+            onBack={handleBack}
             onOpenAddInvoice={handleOpenAddInvoice}
             onOpenRecordPayment={handleOpenRecordPartyPayment}
             onEditInvoice={handleEditInvoice}
@@ -222,9 +360,9 @@ export const App: React.FC = () => {
                 onOpenAddInvoice={() => handleOpenAddInvoice()}
                 onOpenRecordPartyPayment={() => handleOpenRecordPartyPayment()}
                 onOpenRecordCompanyPayment={handleOpenRecordCompanyPayment}
-                onSelectParty={(partyId) => setSelectedPartyId(partyId)}
-                onNavigateToCompany={() => setActiveTab('company')}
-                onNavigateToCollection={() => setActiveTab('collection')}
+                onSelectParty={handleSelectParty}
+                onNavigateToCompany={() => handleTabChange('company')}
+                onNavigateToCollection={() => handleTabChange('collection')}
               />
             )}
 
@@ -236,7 +374,7 @@ export const App: React.FC = () => {
                 dailyReconciliations={dailyReconciliations}
                 onSaveReconciliation={handleSaveReconciliation}
                 onOpenRecordPartyPayment={() => handleOpenRecordPartyPayment()}
-                onSelectParty={(partyId) => setSelectedPartyId(partyId)}
+                onSelectParty={handleSelectParty}
               />
             )}
 
@@ -248,7 +386,7 @@ export const App: React.FC = () => {
                 onOpenAddParty={handleOpenAddParty}
                 onEditParty={handleEditParty}
                 onDeleteParty={handleDeleteParty}
-                onSelectParty={(partyId) => setSelectedPartyId(partyId)}
+                onSelectParty={handleSelectParty}
                 onQuickAddInvoice={handleOpenAddInvoice}
                 onQuickRecordPayment={handleOpenRecordPartyPayment}
               />
@@ -261,7 +399,7 @@ export const App: React.FC = () => {
                 onOpenRecordPayment={handleOpenRecordCompanyPayment}
                 onEditPayment={handleEditCompanyPayment}
                 onDeletePayment={handleDeleteCompanyPayment}
-                onSelectParty={(partyId) => setSelectedPartyId(partyId)}
+                onSelectParty={handleSelectParty}
               />
             )}
 
@@ -271,7 +409,7 @@ export const App: React.FC = () => {
                 invoices={invoices}
                 partyPayments={partyPayments}
                 companyPayments={companyPayments}
-                onSelectParty={(partyId) => setSelectedPartyId(partyId)}
+                onSelectParty={handleSelectParty}
               />
             )}
 
@@ -293,10 +431,7 @@ export const App: React.FC = () => {
       {/* Bottom Tab Bar */}
       <BottomNav
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          setSelectedPartyId(null);
-          setActiveTab(tab);
-        }}
+        onTabChange={handleTabChange}
         partiesBadgeCount={parties.length}
       />
 

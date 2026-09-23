@@ -182,6 +182,74 @@ export function getPartyLedgerTimeline(
   };
 }
 
+export interface PartyPeriodLedger {
+  startDate?: string;
+  endDate?: string;
+  isDateRange: boolean;
+  openingBalance: number;
+  isOpeningAdvance: boolean;
+  periodInvoicesTotal: number;
+  periodPaymentsTotal: number;
+  closingBalance: number;
+  isClosingAdvance: boolean;
+  entries: PartyLedgerEntry[];
+}
+
+/**
+ * Calculates party ledger transactions and balances for a specific date range.
+ * - Opening balance is calculated from all transactions strictly prior to startDate.
+ * - Only transactions between startDate and endDate (inclusive) are returned in entries.
+ * - Closing balance = Opening Balance + Period Invoices - Period Payments.
+ * - If no startDate is specified, it returns the full ledger.
+ */
+export function calculatePartyPeriodLedger(
+  partyId: string,
+  allInvoices: PartyInvoice[],
+  allPayments: PartyPayment[],
+  startDate?: string,
+  endDate?: string
+): PartyPeriodLedger {
+  const fullTimeline = getPartyLedgerTimeline(partyId, allInvoices, allPayments);
+  const isDateRange = Boolean(startDate || endDate);
+
+  // Transactions before startDate
+  const priorEntries = startDate
+    ? fullTimeline.entries.filter((e) => e.date < startDate)
+    : [];
+
+  const priorDebits = priorEntries.reduce((sum, e) => sum + e.debit, 0);
+  const priorCredits = priorEntries.reduce((sum, e) => sum + e.credit, 0);
+  const openingBalance = priorDebits - priorCredits;
+  const isOpeningAdvance = openingBalance < 0;
+
+  // Transactions in the period [startDate, endDate]
+  const periodEntries = fullTimeline.entries.filter((entry) => {
+    if (startDate && entry.date < startDate) return false;
+    if (endDate && entry.date > endDate) return false;
+    return true;
+  });
+
+  const periodInvoicesTotal = periodEntries.reduce((sum, e) => sum + e.debit, 0);
+  const periodPaymentsTotal = periodEntries.reduce((sum, e) => sum + e.credit, 0);
+
+  // Closing balance = Opening Balance + Period Invoices - Period Payments
+  const closingBalance = openingBalance + periodInvoicesTotal - periodPaymentsTotal;
+  const isClosingAdvance = closingBalance < 0;
+
+  return {
+    startDate,
+    endDate,
+    isDateRange,
+    openingBalance,
+    isOpeningAdvance,
+    periodInvoicesTotal,
+    periodPaymentsTotal,
+    closingBalance,
+    isClosingAdvance,
+    entries: periodEntries,
+  };
+}
+
 /**
  * Rule 2, 3, 4:
  * Company balance calculation.

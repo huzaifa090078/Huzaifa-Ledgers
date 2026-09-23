@@ -9,8 +9,7 @@ import type {
   DailyCollectionSummary,
 } from '../types';
 import {
-  getPartyLedgerTimeline,
-  calculatePartyBalance,
+  calculatePartyPeriodLedger,
   formatPKR,
   formatDateDisplay,
   getTodayDateString,
@@ -38,15 +37,9 @@ export function generatePartyLedgerPDF(
     format: 'a4',
   });
 
-  const timeline = getPartyLedgerTimeline(party.id, invoices, payments);
-  const balanceInfo = calculatePartyBalance(party.id, invoices, payments);
-
-  // Filter timeline entries if date range is specified
-  const filteredEntries = timeline.entries.filter((entry) => {
-    if (startDate && entry.date < startDate) return false;
-    if (endDate && entry.date > endDate) return false;
-    return true;
-  });
+  const periodLedger = calculatePartyPeriodLedger(party.id, invoices, payments, startDate, endDate);
+  const isDateRange = periodLedger.isDateRange;
+  const filteredEntries = periodLedger.entries;
 
   // Helper to format date with slashes e.g. 09/09/2026
   const formatPeriodDate = (dateStr?: string): string => {
@@ -124,11 +117,14 @@ export function generatePartyLedgerPDF(
   doc.setTextColor(15, 23, 42);
   doc.text(periodText, 105, 48, { align: 'center' });
 
-  // 3. Outstanding Balance Highlight Box
-  const balanceLabel = balanceInfo.isAdvance ? 'Advance' : 'Remaining Amount';
-  const balanceValue = balanceInfo.isAdvance
-    ? formatPKR(balanceInfo.advanceAmount)
-    : formatPKR(balanceInfo.currentBalance);
+  // 3. Outstanding Balance / Closing Balance Highlight Box
+  const isAdvance = periodLedger.isClosingAdvance;
+  const balanceLabel = isAdvance
+    ? 'Advance'
+    : (isDateRange ? 'Closing Balance' : 'Remaining Amount');
+  const balanceValue = isAdvance
+    ? formatPKR(Math.abs(periodLedger.closingBalance))
+    : formatPKR(periodLedger.closingBalance);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
@@ -137,7 +133,7 @@ export function generatePartyLedgerPDF(
 
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  if (balanceInfo.isAdvance) {
+  if (isAdvance) {
     doc.setTextColor(16, 185, 129); // Green for advance
   } else {
     doc.setTextColor(220, 38, 38); // Red for outstanding
@@ -145,13 +141,36 @@ export function generatePartyLedgerPDF(
   doc.text(balanceValue, 192, 49, { align: 'right' });
 
   // 4. Ledger Table using AutoTable
-  const tableRows = filteredEntries.map((row) => [
-    formatDateDisplay(row.date),
-    row.description,
-    row.debit > 0 ? formatPKR(row.debit) : '-',
-    row.credit > 0 ? formatPKR(row.credit) : '-',
-    formatPKR(row.balance),
-  ]);
+  const tableRows: any[][] = [];
+
+  // Prepend Opening Balance row if this is a custom date range report with a start date
+  if (startDate) {
+    const openingFormatted = periodLedger.isOpeningAdvance
+      ? `(Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))})`
+      : formatPKR(periodLedger.openingBalance);
+
+    tableRows.push([
+      formatDateDisplay(startDate),
+      'Opening Balance',
+      '-',
+      '-',
+      openingFormatted,
+    ]);
+  }
+
+  for (const row of filteredEntries) {
+    tableRows.push([
+      formatDateDisplay(row.date),
+      row.description,
+      row.debit > 0 ? formatPKR(row.debit) : '-',
+      row.credit > 0 ? formatPKR(row.credit) : '-',
+      row.balance < 0 ? `(Adv: ${formatPKR(Math.abs(row.balance))})` : formatPKR(row.balance),
+    ]);
+  }
+
+  if (tableRows.length === 0) {
+    tableRows.push(['-', 'No transactions recorded', '-', '-', formatPKR(0)]);
+  }
 
   autoTable(doc, {
     startY: 66,
@@ -213,29 +232,63 @@ export function generatePartyLedgerPDF(
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(14, summaryY, 182, 26, 2, 2, 'S');
 
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 116, 139);
-  doc.text('Total Invoices (Amount Added):', 20, summaryY + 8);
-  doc.text('Total Payments Received:', 80, summaryY + 8);
-  doc.text('Remaining Amount:', 140, summaryY + 8);
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text(formatPKR(balanceInfo.totalInvoices), 20, summaryY + 18);
-  doc.text(formatPKR(balanceInfo.totalPayments), 80, summaryY + 18);
+  if (startDate) {
+    // 4-Column Layout for Date-Range report:
+    // Opening Balance | Period Invoices | Period Payments | Closing Balance
+    doc.text('Opening Balance:', 18, summaryY + 8);
+    doc.text('Invoices (Period):', 62, summaryY + 8);
+    doc.text('Payments (Period):', 110, summaryY + 8);
+    doc.text('Closing Balance:', 156, summaryY + 8);
 
-  if (balanceInfo.isAdvance) {
-    doc.setTextColor(16, 185, 129);
-    doc.text(`Adv: ${formatPKR(balanceInfo.advanceAmount)}`, 140, summaryY + 18);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+
+    const openBalStr = periodLedger.isOpeningAdvance
+      ? `Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))}`
+      : formatPKR(periodLedger.openingBalance);
+    doc.text(openBalStr, 18, summaryY + 18);
+
+    doc.text(formatPKR(periodLedger.periodInvoicesTotal), 62, summaryY + 18);
+    doc.text(formatPKR(periodLedger.periodPaymentsTotal), 110, summaryY + 18);
+
+    if (periodLedger.isClosingAdvance) {
+      doc.setTextColor(16, 185, 129);
+      doc.text(`Adv: ${formatPKR(Math.abs(periodLedger.closingBalance))}`, 156, summaryY + 18);
+    } else {
+      doc.setTextColor(220, 38, 38);
+      doc.text(formatPKR(periodLedger.closingBalance), 156, summaryY + 18);
+    }
   } else {
-    doc.setTextColor(220, 38, 38);
-    doc.text(formatPKR(balanceInfo.currentBalance), 140, summaryY + 18);
+    // 3-Column Layout for Full Ledger:
+    // Total Invoices (Amount Added) | Total Payments Received | Remaining Amount
+    doc.text('Total Invoices (Amount Added):', 20, summaryY + 8);
+    doc.text('Total Payments Received:', 80, summaryY + 8);
+    doc.text('Remaining Amount:', 140, summaryY + 8);
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatPKR(periodLedger.periodInvoicesTotal), 20, summaryY + 18);
+    doc.text(formatPKR(periodLedger.periodPaymentsTotal), 80, summaryY + 18);
+
+    if (periodLedger.isClosingAdvance) {
+      doc.setTextColor(16, 185, 129);
+      doc.text(`Adv: ${formatPKR(Math.abs(periodLedger.closingBalance))}`, 140, summaryY + 18);
+    } else {
+      doc.setTextColor(220, 38, 38);
+      doc.text(formatPKR(periodLedger.closingBalance), 140, summaryY + 18);
+    }
   }
 
   const safePartyName = party.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filename = `Ledger_${safePartyName}_${getTodayDateString()}.pdf`;
+  const filename = startDate && endDate
+    ? `Ledger_${safePartyName}_${startDate}_to_${endDate}.pdf`
+    : `Ledger_${safePartyName}_${getTodayDateString()}.pdf`;
 
   const pdfBlob = doc.output('blob');
   return { pdfBlob, filename };
@@ -331,9 +384,11 @@ export async function downloadPartyLedgerPDF(
   party: Party,
   invoices: PartyInvoice[],
   payments: PartyPayment[],
-  salesmanName?: string
+  salesmanName?: string,
+  startDate?: string,
+  endDate?: string
 ): Promise<SavePDFResult> {
-  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName);
+  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName, startDate, endDate);
   return await saveOrDownloadPDF(pdfBlob, filename);
 }
 

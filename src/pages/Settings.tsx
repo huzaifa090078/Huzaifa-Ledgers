@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Download,
   Upload,
@@ -34,6 +34,21 @@ export const Settings: React.FC<SettingsProps> = ({
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [pendingRestorePayload, setPendingRestorePayload] = useState<any | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Listen for Android Back Button event to dismiss confirm dialogs if open
+  useEffect(() => {
+    const handleAppBack = (e: Event) => {
+      if (clearModalOpen) {
+        e.preventDefault();
+        setClearModalOpen(false);
+      } else if (restoreModalOpen) {
+        e.preventDefault();
+        setRestoreModalOpen(false);
+      }
+    };
+    window.addEventListener('app:back', handleAppBack);
+    return () => window.removeEventListener('app:back', handleAppBack);
+  }, [clearModalOpen, restoreModalOpen]);
 
   const handleExportBackup = async () => {
     try {

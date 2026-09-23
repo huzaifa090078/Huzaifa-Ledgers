@@ -3,7 +3,12 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { Party, PartyInvoice, PartyPayment } from '../types';
 import { generatePartyLedgerPDF, blobToBase64 } from './pdf';
-import { calculatePartyBalance, formatPKR, formatDateDisplay, getTodayDateString } from './accounting';
+import {
+  calculatePartyPeriodLedger,
+  formatPKR,
+  formatDateDisplay,
+  getTodayDateString,
+} from './accounting';
 
 export interface ShareResult {
   sharedViaWebShare: boolean;
@@ -19,17 +24,27 @@ export async function sharePartyLedger(
   party: Party,
   invoices: PartyInvoice[],
   payments: PartyPayment[],
-  salesmanName = 'Sales Representative'
+  salesmanName = 'Sales Representative',
+  startDate?: string,
+  endDate?: string
 ): Promise<ShareResult> {
-  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName);
-  const balanceInfo = calculatePartyBalance(party.id, invoices, payments);
+  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName, startDate, endDate);
+  const periodLedger = calculatePartyPeriodLedger(party.id, invoices, payments, startDate, endDate);
 
-  const summaryText = `*Smart Technology Ledger Statement*\n` +
-    `Party: *${party.name}*\n` +
-    `Date: ${formatDateDisplay(getTodayDateString())}\n` +
-    `Total Invoices: ${formatPKR(balanceInfo.totalInvoices)}\n` +
-    `Total Payments: ${formatPKR(balanceInfo.totalPayments)}\n` +
-    `*Remaining Amount: ${balanceInfo.isAdvance ? `(Advance: ${formatPKR(balanceInfo.advanceAmount)})` : formatPKR(balanceInfo.currentBalance)}*`;
+  const summaryText = startDate
+    ? `*Smart Technology Ledger Statement*\n` +
+      `Party: *${party.name}*\n` +
+      `Period: *${formatDateDisplay(startDate)} to ${formatDateDisplay(endDate || getTodayDateString())}*\n` +
+      `Opening Balance: ${periodLedger.isOpeningAdvance ? `(Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))})` : formatPKR(periodLedger.openingBalance)}\n` +
+      `Period Invoices: ${formatPKR(periodLedger.periodInvoicesTotal)}\n` +
+      `Period Payments: ${formatPKR(periodLedger.periodPaymentsTotal)}\n` +
+      `*Closing Balance: ${periodLedger.isClosingAdvance ? `(Advance: ${formatPKR(Math.abs(periodLedger.closingBalance))})` : formatPKR(periodLedger.closingBalance)}*`
+    : `*Smart Technology Ledger Statement*\n` +
+      `Party: *${party.name}*\n` +
+      `Date: ${formatDateDisplay(getTodayDateString())}\n` +
+      `Total Invoices: ${formatPKR(periodLedger.periodInvoicesTotal)}\n` +
+      `Total Payments: ${formatPKR(periodLedger.periodPaymentsTotal)}\n` +
+      `*Remaining Amount: ${periodLedger.isClosingAdvance ? `(Advance: ${formatPKR(Math.abs(periodLedger.closingBalance))})` : formatPKR(periodLedger.closingBalance)}*`;
 
   // 1. Android / Native Capacitor flow: Save PDF locally and trigger native Share sheet with PDF file attached
   if (Capacitor.isNativePlatform()) {

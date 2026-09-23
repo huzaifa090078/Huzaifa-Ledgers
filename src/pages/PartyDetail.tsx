@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Phone,
   MapPin,
@@ -11,16 +11,40 @@ import {
   Clock,
   ArrowDownLeft,
   ArrowLeft,
+  X,
 } from 'lucide-react';
 import type { Party, PartyInvoice, PartyPayment } from '../types';
 import {
   getPartyLedgerTimeline,
   calculatePartyBalance,
+  calculatePartyPeriodLedger,
   formatPKR,
   formatDateDisplay,
+  getTodayDateString,
 } from '../services/accounting';
 import { downloadPartyLedgerPDF } from '../services/pdf';
 import { sharePartyLedger } from '../services/share';
+
+const getFirstDayOfMonth = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
+
+const getLast30DaysDate = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getFirstDayOfYear = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-01-01`;
+};
 
 interface PartyDetailProps {
   party: Party;
@@ -49,19 +73,42 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
 }) => {
   const [sharing, setSharing] = useState(false);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'full' | 'range'>('full');
+  const [startDate, setStartDate] = useState(getFirstDayOfMonth());
+  const [endDate, setEndDate] = useState(getTodayDateString());
+
+  // Listen to Android hardware back button so it closes the export modal first
+  useEffect(() => {
+    if (!isExportModalOpen) return;
+    const handleAppBack = (e: Event) => {
+      e.preventDefault();
+      setIsExportModalOpen(false);
+    };
+    window.addEventListener('app:back', handleAppBack);
+    return () => window.removeEventListener('app:back', handleAppBack);
+  }, [isExportModalOpen]);
 
   const timeline = getPartyLedgerTimeline(party.id, invoices, partyPayments);
   const balanceInfo = calculatePartyBalance(party.id, invoices, partyPayments);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (customStart?: string, customEnd?: string) => {
     setSharing(true);
     setShareFeedback(null);
     try {
-      const res = await downloadPartyLedgerPDF(party, invoices, partyPayments);
+      const res = await downloadPartyLedgerPDF(
+        party,
+        invoices,
+        partyPayments,
+        undefined,
+        customStart,
+        customEnd
+      );
       if (res?.message) {
         setShareFeedback(res.message);
         setTimeout(() => setShareFeedback(null), 4000);
       }
+      setIsExportModalOpen(false);
     } catch (err: any) {
       setShareFeedback('Failed to export PDF.');
       setTimeout(() => setShareFeedback(null), 3000);
@@ -70,13 +117,21 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
     }
   };
 
-  const handleShareWhatsApp = async () => {
+  const handleShareWhatsApp = async (customStart?: string, customEnd?: string) => {
     setSharing(true);
     setShareFeedback(null);
     try {
-      const res = await sharePartyLedger(party, invoices, partyPayments);
+      const res = await sharePartyLedger(
+        party,
+        invoices,
+        partyPayments,
+        undefined,
+        customStart,
+        customEnd
+      );
       setShareFeedback(res.message);
       setTimeout(() => setShareFeedback(null), 4000);
+      setIsExportModalOpen(false);
     } catch (err: any) {
       setShareFeedback('Could not trigger share.');
       setTimeout(() => setShareFeedback(null), 3000);
@@ -84,6 +139,12 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
       setSharing(false);
     }
   };
+
+  const isRange = exportMode === 'range';
+  const isDateRangeInvalid = isRange && startDate > endDate;
+  const periodData = isRange
+    ? calculatePartyPeriodLedger(party.id, invoices, partyPayments, startDate, endDate)
+    : null;
 
   return (
     <div className="space-y-3.5 pb-20">
@@ -184,7 +245,9 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </button>
 
           <button
-            onClick={handleExportPDF}
+            onClick={() => {
+              setIsExportModalOpen(true);
+            }}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-800 border border-slate-200 transition"
           >
             <Download className="w-4 h-4 text-slate-700 mb-1" />
@@ -192,7 +255,9 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </button>
 
           <button
-            onClick={handleShareWhatsApp}
+            onClick={() => {
+              setIsExportModalOpen(true);
+            }}
             disabled={sharing}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-sky-50 hover:bg-sky-100 active:bg-sky-200 text-sky-900 border border-sky-200 transition disabled:opacity-50"
           >
@@ -385,6 +450,243 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                 ? `Advance: ${formatPKR(balanceInfo.advanceAmount)}`
                 : formatPKR(balanceInfo.currentBalance)}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Export / Date Range Modal */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-sky-400 tracking-wider">
+                  Export / Download Statement
+                </span>
+                <h3 className="text-base font-bold text-white m-0">Party Ledger Report</h3>
+                <p className="text-xs text-slate-300 mt-0.5">{party.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto">
+              {/* Toggle: Full Ledger vs Custom Date Range */}
+              <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setExportMode('full')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
+                    exportMode === 'full'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Full Ledger (All Time)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportMode('range')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
+                    exportMode === 'range'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Custom Date Range
+                </button>
+              </div>
+
+              {/* Custom Date Range Controls */}
+              {exportMode === 'range' && (
+                <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  {/* Quick Presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Quick:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDate(getFirstDayOfMonth());
+                        setEndDate(getTodayDateString());
+                      }}
+                      className="px-2 py-1 text-[11px] font-medium bg-white hover:bg-slate-100 border border-slate-200 rounded-md text-slate-700 transition"
+                    >
+                      This Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDate(getLast30DaysDate());
+                        setEndDate(getTodayDateString());
+                      }}
+                      className="px-2 py-1 text-[11px] font-medium bg-white hover:bg-slate-100 border border-slate-200 rounded-md text-slate-700 transition"
+                    >
+                      Last 30 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDate(getFirstDayOfYear());
+                        setEndDate(getTodayDateString());
+                      }}
+                      className="px-2 py-1 text-[11px] font-medium bg-white hover:bg-slate-100 border border-slate-200 rounded-md text-slate-700 transition"
+                    >
+                      This Year
+                    </button>
+                  </div>
+
+                  {/* Date Inputs */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        From Date
+                      </label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full text-xs px-2.5 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 font-mono focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        To Date
+                      </label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full text-xs px-2.5 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 font-mono focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  {isDateRangeInvalid && (
+                    <p className="text-xs text-red-600 font-medium m-0">
+                      From Date cannot be later than To Date.
+                    </p>
+                  )}
+
+                  {/* Period Preview Card */}
+                  {periodData && !isDateRangeInvalid && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 space-y-1.5 text-xs">
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>Opening Balance (prior to {formatDateDisplay(startDate)}):</span>
+                        <span className="font-mono font-bold text-slate-800">
+                          {periodData.isOpeningAdvance
+                            ? `(Adv: ${formatPKR(Math.abs(periodData.openingBalance))})`
+                            : formatPKR(periodData.openingBalance)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>Period Invoices ({periodData.entries.filter((e) => e.type === 'invoice').length}):</span>
+                        <span className="font-mono font-bold text-slate-900">
+                          {formatPKR(periodData.periodInvoicesTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>Period Payments ({periodData.entries.filter((e) => e.type === 'payment').length}):</span>
+                        <span className="font-mono font-bold text-emerald-700">
+                          {formatPKR(periodData.periodPaymentsTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-200 font-bold">
+                        <span className="text-slate-800">Period Closing Balance:</span>
+                        <span
+                          className={`font-mono ${
+                            periodData.isClosingAdvance
+                              ? 'text-emerald-600'
+                              : periodData.closingBalance > 0
+                              ? 'text-red-600'
+                              : 'text-slate-700'
+                          }`}
+                        >
+                          {periodData.isClosingAdvance
+                            ? `(Adv: ${formatPKR(Math.abs(periodData.closingBalance))})`
+                            : formatPKR(periodData.closingBalance)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full Ledger Summary Preview */}
+              {exportMode === 'full' && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>All-Time Invoices:</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {formatPKR(balanceInfo.totalInvoices)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>All-Time Payments:</span>
+                    <span className="font-mono font-bold text-emerald-700">
+                      {formatPKR(balanceInfo.totalPayments)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200 font-bold">
+                    <span className="text-slate-800">Remaining Amount:</span>
+                    <span
+                      className={`font-mono ${
+                        balanceInfo.isAdvance
+                          ? 'text-emerald-600'
+                          : balanceInfo.currentBalance > 0
+                          ? 'text-red-400'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      {balanceInfo.isAdvance
+                        ? `(Adv: ${formatPKR(balanceInfo.advanceAmount)})`
+                        : formatPKR(balanceInfo.currentBalance)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  disabled={sharing || isDateRangeInvalid}
+                  onClick={() => {
+                    if (exportMode === 'range') {
+                      handleExportPDF(startDate, endDate);
+                    } else {
+                      handleExportPDF();
+                    }
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{sharing ? 'Generating PDF...' : 'Download PDF Statement'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={sharing || isDateRangeInvalid}
+                  onClick={() => {
+                    if (exportMode === 'range') {
+                      handleShareWhatsApp(startDate, endDate);
+                    } else {
+                      handleShareWhatsApp();
+                    }
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>{sharing ? 'Sharing...' : 'Share on WhatsApp'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

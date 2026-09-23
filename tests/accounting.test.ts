@@ -497,6 +497,166 @@ describe('Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(pdfText).not.toContain('Matched');
     });
   });
+
+  describe('Date-Range Party Ledger Calculations & Reports', () => {
+    const testParty: Party = {
+      id: 'party-dr-1',
+      name: 'Modern Electronics',
+      createdAt: '2026-08-01T10:00:00Z',
+      updatedAt: '2026-08-01T10:00:00Z',
+    };
+
+    const invoices: PartyInvoice[] = [
+      {
+        id: 'inv-prior-1',
+        invoiceNumber: 'INV-101',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-01',
+        amount: 50000,
+        createdAt: '2026-09-01T10:00:00Z',
+        updatedAt: '2026-09-01T10:00:00Z',
+      },
+      {
+        id: 'inv-period-1',
+        invoiceNumber: 'INV-102',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-11',
+        amount: 25000,
+        createdAt: '2026-09-11T10:00:00Z',
+        updatedAt: '2026-09-11T10:00:00Z',
+      },
+      {
+        id: 'inv-after-1',
+        invoiceNumber: 'INV-103',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-20',
+        amount: 15000,
+        createdAt: '2026-09-20T10:00:00Z',
+        updatedAt: '2026-09-20T10:00:00Z',
+      },
+    ];
+
+    const payments: PartyPayment[] = [
+      {
+        id: 'pmt-prior-1',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-05',
+        amount: 20000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-05T12:00:00Z',
+        updatedAt: '2026-09-05T12:00:00Z',
+      },
+      {
+        id: 'pmt-period-1',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-14',
+        amount: 10000,
+        paymentMethod: 'Bank',
+        createdAt: '2026-09-14T15:00:00Z',
+        updatedAt: '2026-09-14T15:00:00Z',
+      },
+      {
+        id: 'pmt-after-1',
+        partyId: testParty.id,
+        partyName: testParty.name,
+        date: '2026-09-22',
+        amount: 5000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-22T11:00:00Z',
+        updatedAt: '2026-09-22T11:00:00Z',
+      },
+    ];
+
+    it('calculates full ledger correctly when no date range is provided', async () => {
+      const { calculatePartyPeriodLedger } = await import('../src/services/accounting');
+      const res = calculatePartyPeriodLedger(testParty.id, invoices, payments);
+
+      expect(res.isDateRange).toBe(false);
+      expect(res.openingBalance).toBe(0);
+      expect(res.periodInvoicesTotal).toBe(90000);
+      expect(res.periodPaymentsTotal).toBe(35000);
+      expect(res.closingBalance).toBe(55000);
+      expect(res.entries.length).toBe(6);
+    });
+
+    it('calculates date range ledger with accurate Opening Balance and Period Totals', async () => {
+      const { calculatePartyPeriodLedger } = await import('../src/services/accounting');
+      // Date range: 2026-09-10 to 2026-09-15
+      // Prior transactions (< 2026-09-10):
+      // - inv-prior-1: +50,000
+      // - pmt-prior-1: -20,000
+      // Expected Opening Balance = +30,000
+      // Period transactions (2026-09-10 to 2026-09-15):
+      // - inv-period-1 (2026-09-11): +25,000
+      // - pmt-period-1 (2026-09-14): -10,000
+      // Expected Period Invoices = 25,000
+      // Expected Period Payments = 10,000
+      // Expected Closing Balance = 30,000 + 25,000 - 10,000 = 45,000
+      const res = calculatePartyPeriodLedger(testParty.id, invoices, payments, '2026-09-10', '2026-09-15');
+
+      expect(res.isDateRange).toBe(true);
+      expect(res.openingBalance).toBe(30000);
+      expect(res.isOpeningAdvance).toBe(false);
+      expect(res.periodInvoicesTotal).toBe(25000);
+      expect(res.periodPaymentsTotal).toBe(10000);
+      expect(res.closingBalance).toBe(45000);
+      expect(res.isClosingAdvance).toBe(false);
+      expect(res.entries.length).toBe(2);
+      expect(res.entries[0].id).toBe('inv-period-1');
+      expect(res.entries[1].id).toBe('pmt-period-1');
+    });
+
+    it('correctly handles advance/negative opening balance when payments exceed invoices prior to start date', async () => {
+      const { calculatePartyPeriodLedger } = await import('../src/services/accounting');
+      const advancePayments: PartyPayment[] = [
+        {
+          id: 'pmt-adv-1',
+          partyId: testParty.id,
+          partyName: testParty.name,
+          date: '2026-09-05',
+          amount: 80000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-05T10:00:00Z',
+          updatedAt: '2026-09-05T10:00:00Z',
+        },
+      ];
+
+      // Prior: inv = 50,000, pmt = 80,000 -> Opening Balance = -30,000 (Advance)
+      const res = calculatePartyPeriodLedger(testParty.id, invoices, advancePayments, '2026-09-10', '2026-09-15');
+
+      expect(res.openingBalance).toBe(-30000);
+      expect(res.isOpeningAdvance).toBe(true);
+      // Period: inv = 25,000, pmt = 0
+      // Closing = -30,000 + 25,000 = -5,000 (still Advance)
+      expect(res.closingBalance).toBe(-5000);
+      expect(res.isClosingAdvance).toBe(true);
+    });
+
+    it('generates Party Ledger PDF with date range containing Opening Balance row and correct filename', async () => {
+      const { generatePartyLedgerPDF } = await import('../src/services/pdf');
+      const result = generatePartyLedgerPDF(
+        testParty,
+        invoices,
+        payments,
+        'Test Representative',
+        '2026-09-10',
+        '2026-09-15'
+      );
+
+      expect(result.filename).toBe('Ledger_Modern_Electronics_2026-09-10_to_2026-09-15.pdf');
+      expect(result.pdfBlob.size).toBeGreaterThan(1000);
+
+      const pdfText = await result.pdfBlob.text();
+      expect(pdfText).toContain('Opening Balance');
+      expect(pdfText).toContain('Closing Balance');
+      expect(pdfText).toContain('10/09/2026 to 15/09/2026');
+    });
+  });
 });
 
 
