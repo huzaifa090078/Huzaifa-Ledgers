@@ -5,7 +5,6 @@ import {
   Receipt,
   FileText,
   UserPlus,
-  PlusCircle,
   Building2,
   CheckCircle2,
   AlertCircle,
@@ -30,9 +29,9 @@ interface DashboardProps {
   companyPayments: CompanyPayment[];
   dailyReconciliations?: DailyReconciliation[];
   onOpenAddParty: () => void;
-  onOpenAddInvoice: () => void;
-  onOpenRecordPartyPayment: () => void;
-  onOpenRecordCompanyPayment: () => void;
+  onOpenAddInvoice?: () => void;
+  onOpenRecordPartyPayment?: () => void;
+  onOpenRecordCompanyPayment?: () => void;
   onSelectParty: (partyId: string) => void;
   onNavigateToCompany: () => void;
   onNavigateToCollection: () => void;
@@ -45,9 +44,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   companyPayments,
   dailyReconciliations = [],
   onOpenAddParty,
-  onOpenAddInvoice,
-  onOpenRecordPartyPayment,
-  onOpenRecordCompanyPayment,
   onSelectParty,
   onNavigateToCompany,
   onNavigateToCollection,
@@ -242,55 +238,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 4. Quick Action Buttons */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-          Quick Actions
-        </span>
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <button
-            onClick={onOpenAddParty}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition"
-          >
-            <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center mb-1">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">Add Party</span>
-          </button>
-
-          <button
-            onClick={onOpenAddInvoice}
-            disabled={parties.length === 0}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition disabled:opacity-40"
-          >
-            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mb-1">
-              <FileText className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">Add Invoice</span>
-          </button>
-
-          <button
-            onClick={onOpenRecordPartyPayment}
-            disabled={parties.length === 0}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition disabled:opacity-40"
-          >
-            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1">
-              <PlusCircle className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">Record Payment</span>
-          </button>
-
-          <button
-            onClick={onOpenRecordCompanyPayment}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition"
-          >
-            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center mb-1">
-              <Building2 className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">Pay Company</span>
-          </button>
-        </div>
-      </div>
 
       {/* 5. Recent Entries Feed */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">

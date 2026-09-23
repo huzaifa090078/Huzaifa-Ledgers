@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type { Party, PartyInvoice, PartyPayment, CompanyPayment, DailyReconciliation } from './types';
 import type { NavTab } from './components/BottomNav';
-import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 
 // Pages
@@ -192,60 +191,8 @@ export const App: React.FC = () => {
     await db.dailyReconciliations.put(recon);
   };
 
-  // Header configuration based on screen state
-  const getHeaderProps = () => {
-    if (selectedParty) {
-      return {
-        title: selectedParty.name,
-        subtitle: 'Party Ledger Account',
-        onBack: () => setSelectedPartyId(null),
-      };
-    }
-
-    switch (activeTab) {
-      case 'dashboard':
-        return {
-          title: 'Smart Tech Ledger',
-          subtitle: 'Salesman Offline App',
-        };
-      case 'collection':
-        return {
-          title: 'Daily Collection',
-          subtitle: 'Party Payments & Balance Check',
-        };
-      case 'parties':
-        return {
-          title: 'Parties & Shops',
-          subtitle: `${parties.length} accounts recorded`,
-        };
-      case 'company':
-        return {
-          title: 'Smart Technology',
-          subtitle: 'Company Amount Payable Account',
-        };
-      case 'analytics':
-        return {
-          title: 'Ledger Analytics',
-          subtitle: 'Financial Position Breakdown',
-        };
-      case 'settings':
-        return {
-          title: 'Settings & Backup',
-          subtitle: 'Local Storage & Security',
-        };
-    }
-  };
-
-  const headerProps = getHeaderProps();
-
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-sky-600 selection:text-white">
-      {/* Top Mobile Header */}
-      <Header
-        title={headerProps.title}
-        subtitle={headerProps.subtitle}
-        onBack={headerProps.onBack}
-      />
 
       {/* Main Content Area constrained to mobile width */}
       <main className="flex-1 w-full max-w-md mx-auto px-3.5 pt-3.5 pb-20">

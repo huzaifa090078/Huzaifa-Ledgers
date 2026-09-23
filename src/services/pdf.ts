@@ -48,11 +48,28 @@ export function generatePartyLedgerPDF(
     return true;
   });
 
-  // Statement period text
-  const periodText =
-    startDate || endDate
-      ? `${formatDateDisplay(startDate) || 'Beginning'} to ${formatDateDisplay(endDate) || 'Current'}`
-      : `Complete Statement up to ${formatDateDisplay(getTodayDateString())}`;
+  // Helper to format date with slashes e.g. 09/09/2026
+  const formatPeriodDate = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    return formatDateDisplay(dateStr).replace(/-/g, '/');
+  };
+
+  // Determine starting and ending dates from filters or transactions
+  const effectiveStartDate =
+    startDate ||
+    (filteredEntries.length > 0
+      ? filteredEntries[0].date
+      : party.createdAt
+      ? party.createdAt.split('T')[0]
+      : getTodayDateString());
+
+  const effectiveEndDate =
+    endDate ||
+    (filteredEntries.length > 0
+      ? filteredEntries[filteredEntries.length - 1].date
+      : getTodayDateString());
+
+  const periodText = `${formatPeriodDate(effectiveStartDate)} to ${formatPeriodDate(effectiveEndDate)}`;
 
   // Palette colors
   const primaryColor = [15, 23, 42]; // slate-900
@@ -97,11 +114,15 @@ export function generatePartyLedgerPDF(
     doc.text(`Address: ${party.address}`, 18, 53);
   }
 
+  // Center: Statement Period
   doc.setFontSize(9);
-  doc.text('Statement Period:', 120, 41);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('Statement Period:', 105, 41, { align: 'center' });
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(periodText, 120, 47);
+  doc.text(periodText, 105, 48, { align: 'center' });
 
   // 3. Outstanding Balance Highlight Box
   const balanceLabel = balanceInfo.isAdvance ? 'Advance' : 'Remaining Amount';
