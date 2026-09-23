@@ -67,7 +67,7 @@ The application manages ledgers and accounts while keeping two distinct financia
 6. **Settings & Backup**:
    - Export backup to JSON.
    - Restore backup with schema validation.
-   - Seed demo scenario data (`Ali Mobiles`, `Bilal Traders`, `Usman Accessories`).
+   - Seed demo scenario data (`Ali Traders`, `Bilal Traders`, `Usman General Store`).
    - Secure local storage privacy guarantee.
 
 ---

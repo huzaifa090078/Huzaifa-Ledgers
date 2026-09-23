@@ -99,7 +99,7 @@ export const AddEditPartyModal: React.FC<AddEditPartyModalProps> = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Ali Mobiles"
+                placeholder="e.g. Ali Traders"
                 required
                 autoFocus
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
@@ -136,7 +136,7 @@ export const AddEditPartyModal: React.FC<AddEditPartyModalProps> = ({
               <textarea
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Shop # 12, Hall Road, Lahore"
+                placeholder="Shop # 12, Main Market, Lahore"
                 rows={2}
                 className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition resize-none"
               />

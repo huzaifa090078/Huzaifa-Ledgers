@@ -1,7 +1,7 @@
 {
   "short_name": "LedgerApp",
-  "name": "Smart Technology - Salesman Mobile Ledger",
-  "description": "Offline-First Mobile Ledger Management Application for Smart Technology Salesman",
+  "name": "Smart Technology - Business Ledger",
+  "description": "Offline-First Ledger Management Application for Smart Technology Businesses",
   "icons": [
     {
       "src": "/favicon.svg",

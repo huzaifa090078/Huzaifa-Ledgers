@@ -29,7 +29,7 @@ export async function exportBackupFile(): Promise<{ filename: string; count: num
 
   const payload: BackupDataPayload = {
     version: 1,
-    appName: 'Smart Technology Salesman Mobile Ledger',
+    appName: 'Smart Technology Business Ledger',
     exportedAt: new Date().toISOString(),
     parties,
     invoices,

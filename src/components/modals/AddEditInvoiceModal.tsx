@@ -219,7 +219,7 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. 10x Mobile Chargers, 5x Earphones"
+              placeholder="e.g. 10x Product Boxes, 5x Cartons"
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
             />
           </div>

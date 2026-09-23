@@ -239,7 +239,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
               onClick={() => onOpenAddInvoice(party.id)}
               className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 rounded-lg shadow-xs hover:bg-amber-700"
             >
-              + Add Company Invoice
+              + Add Invoice
             </button>
             <button
               onClick={() => onOpenRecordPayment(party.id)}

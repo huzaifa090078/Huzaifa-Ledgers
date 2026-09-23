@@ -107,9 +107,9 @@ export const Settings: React.FC<SettingsProps> = ({
       const today = getTodayDateString();
       const p1: Party = {
         id: generateId(),
-        name: 'Ali Mobiles',
+        name: 'Ali Traders',
         phone: '0300-1234567',
-        address: 'Shop #4, Hall Road, Lahore',
+        address: 'Shop #4, Main Market, Lahore',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -117,15 +117,15 @@ export const Settings: React.FC<SettingsProps> = ({
         id: generateId(),
         name: 'Bilal Traders',
         phone: '0321-9876543',
-        address: 'Main Market, Hafeez Centre, Lahore',
+        address: 'Shop #12, Commercial Market, Lahore',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       const p3: Party = {
         id: generateId(),
-        name: 'Usman Accessories',
+        name: 'Usman General Store',
         phone: '0333-5554433',
-        address: 'Shop #18, Regal Chowk, Karachi',
+        address: 'Shop #18, Saddar Bazaar, Karachi',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -137,7 +137,7 @@ export const Settings: React.FC<SettingsProps> = ({
         partyName: p1.name,
         date: today,
         amount: 30000,
-        description: 'Smart Tech chargers & power banks',
+        description: 'Stock supply items',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -148,7 +148,7 @@ export const Settings: React.FC<SettingsProps> = ({
         partyName: p2.name,
         date: today,
         amount: 45000,
-        description: 'Wireless earbuds and cables',
+        description: 'Retail goods delivery',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -159,7 +159,7 @@ export const Settings: React.FC<SettingsProps> = ({
         partyName: p3.name,
         date: today,
         amount: 15000,
-        description: 'Screen protectors & back covers',
+        description: 'Assorted product inventory',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -308,7 +308,7 @@ export const Settings: React.FC<SettingsProps> = ({
           <div className="pr-3">
             <h3 className="text-xs font-bold text-slate-800 m-0">Load Demo Data</h3>
             <p className="text-[11px] text-slate-500 m-0 mt-0.5">
-              Load sample parties (Ali Mobiles, Bilal Traders), invoices, and deposits.
+              Load sample parties (Ali Traders, Bilal Traders), invoices, and deposits.
             </p>
           </div>
           <button
@@ -354,7 +354,7 @@ export const Settings: React.FC<SettingsProps> = ({
           • The app works 100% without an internet connection.
         </p>
         <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-200 flex items-center justify-between">
-          <span>Smart Technology Mobile Ledger v1.0.0</span>
+          <span>Smart Technology Business Ledger v1.0.0</span>
           <span>Offline PWA</span>
         </div>
       </div>

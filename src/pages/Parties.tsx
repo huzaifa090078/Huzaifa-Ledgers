@@ -168,7 +168,7 @@ export const Parties: React.FC<PartiesProps> = ({
           <p className="text-[11px] text-slate-400 mb-4 max-w-xs mx-auto">
             {searchQuery
               ? `No party matches "${searchQuery}". Try another search term.`
-              : 'Add your customer shops to begin maintaining their separate ledger records.'}
+              : 'Add your parties or customers to begin maintaining their ledger records.'}
           </p>
           <button
             onClick={onOpenAddParty}
