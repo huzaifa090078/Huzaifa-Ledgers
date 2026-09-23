@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import type {
   Party,
   PartyInvoice,
@@ -326,39 +327,50 @@ export async function saveOrDownloadPDF(
   if (Capacitor.isNativePlatform()) {
     try {
       const base64Data = await blobToBase64(blob);
-      const saved = await Filesystem.writeFile({
-        path: filename,
-        data: base64Data,
-        directory: Directory.Documents,
-        recursive: true,
-      });
+      let fileUri = '';
 
-      return {
-        success: true,
-        path: saved.uri,
-        message: `PDF saved successfully to Documents/${filename}`,
-      };
-    } catch (err: any) {
       try {
-        const base64Data = await blobToBase64(blob);
         const saved = await Filesystem.writeFile({
           path: filename,
           data: base64Data,
           directory: Directory.Cache,
           recursive: true,
         });
-        return {
-          success: true,
-          path: saved.uri,
-          message: `PDF saved to cache/${filename}`,
-        };
-      } catch (fallbackErr: any) {
-        console.error('Failed to save PDF locally:', fallbackErr);
-        return {
-          success: false,
-          message: `Failed to save PDF: ${fallbackErr.message || fallbackErr}`,
-        };
+        fileUri = saved.uri;
+      } catch {
+        const saved = await Filesystem.writeFile({
+          path: filename,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true,
+        });
+        fileUri = saved.uri;
       }
+
+      // Open Android native Save / Export sheet (Downloads, Drive, Acrobat, Print, Files, etc.)
+      try {
+        await Share.share({
+          title: filename,
+          url: fileUri,
+          dialogTitle: 'Save / Export PDF Statement',
+        });
+      } catch (shareErr: any) {
+        if (shareErr?.name !== 'AbortError') {
+          console.warn('Share sheet dismissed or error:', shareErr);
+        }
+      }
+
+      return {
+        success: true,
+        path: fileUri,
+        message: `PDF exported successfully (${filename})`,
+      };
+    } catch (err: any) {
+      console.error('Failed to export PDF locally:', err);
+      return {
+        success: false,
+        message: `Failed to export PDF: ${err.message || err}`,
+      };
     }
   } else {
     // Standard Browser Download

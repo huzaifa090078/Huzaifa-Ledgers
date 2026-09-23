@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { db } from '../db';
 import type { Party, PartyInvoice, PartyPayment, CompanyPayment, AppSettings, DailyReconciliation } from '../types';
 import { getTodayDateString } from './accounting';
@@ -42,19 +45,60 @@ export async function exportBackupFile(): Promise<{ filename: string; count: num
   const totalCount =
     parties.length + invoices.length + partyPayments.length + companyPayments.length + dailyReconciliations.length;
   const jsonStr = JSON.stringify(payload, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
   const filename = `SmartTech_Ledger_Backup_${getTodayDateString()}.json`;
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  if (Capacitor.isNativePlatform()) {
+    // 1. Write the backup JSON file to device filesystem
+    let fileUri = '';
+    try {
+      const writeRes = await Filesystem.writeFile({
+        path: filename,
+        data: jsonStr,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+      fileUri = writeRes.uri;
+    } catch {
+      const writeRes = await Filesystem.writeFile({
+        path: filename,
+        data: jsonStr,
+        directory: Directory.Documents,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+      fileUri = writeRes.uri;
+    }
 
-  return { filename, count: totalCount };
+    // 2. Open Android native Save / Export sheet to allow saving to Downloads, Drive, File Manager, etc.
+    try {
+      await Share.share({
+        title: filename,
+        text: `SmartTech Ledger Backup (${totalCount} records)`,
+        url: fileUri,
+        dialogTitle: 'Save / Export Backup File',
+      });
+    } catch (shareErr: any) {
+      if (shareErr?.name !== 'AbortError') {
+        console.warn('Backup share sheet dismissed or error:', shareErr);
+      }
+    }
+
+    return { filename, count: totalCount };
+  } else {
+    // Standard Desktop / Laptop Browser Download
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    return { filename, count: totalCount };
+  }
 }
 
 /**
