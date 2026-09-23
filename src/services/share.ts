@@ -1,10 +1,5 @@
 import type { Party, PartyInvoice, PartyPayment } from '../types';
-import {
-  calculatePartyPeriodLedger,
-  formatPKR,
-  formatDateDisplay,
-  getTodayDateString,
-} from './accounting';
+import { calculatePartyBalance, formatPKR } from './accounting';
 
 export interface ShareResult {
   sharedViaWebShare: boolean;
@@ -13,52 +8,53 @@ export interface ShareResult {
 }
 
 /**
- * Builds readable text representation of the ledger statement for WhatsApp sharing.
+ * Builds short, simple plain-text WhatsApp message for normal Share button.
+ * Format:
+ * Party: {Party Name}
+ *
+ * Last Balance: Rs. {amount}
+ * Recent Payment: Rs. {amount}
+ * Pending Balance: Rs. {amount}
  */
 export function buildLedgerSummaryText(
   party: Party,
   invoices: PartyInvoice[],
-  payments: PartyPayment[],
-  startDate?: string,
-  endDate?: string
+  payments: PartyPayment[]
 ): string {
-  const periodLedger = calculatePartyPeriodLedger(party.id, invoices, payments, startDate, endDate);
+  const balanceInfo = calculatePartyBalance(party.id, invoices, payments);
 
-  if (startDate) {
-    return (
-      `*Login Smart Technology Ledger Statement*\n` +
-      `Party: *${party.name}*\n` +
-      `Period: *${formatDateDisplay(startDate)} to ${formatDateDisplay(endDate || getTodayDateString())}*\n` +
-      `Opening Balance: ${periodLedger.isOpeningAdvance ? `(Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))})` : formatPKR(periodLedger.openingBalance)}\n` +
-      `Period Invoices: ${formatPKR(periodLedger.periodInvoicesTotal)}\n` +
-      `Period Payments: ${formatPKR(periodLedger.periodPaymentsTotal)}\n` +
-      `*Closing Balance: ${periodLedger.isClosingAdvance ? `(Advance: ${formatPKR(Math.abs(periodLedger.closingBalance))})` : formatPKR(periodLedger.closingBalance)}*`
-    );
-  }
+  // Find most recent payment for this party
+  const partyPayments = payments
+    .filter((p) => p.partyId === party.id)
+    .sort((a, b) => {
+      const dateCompare = (b.date || '').localeCompare(a.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+  const recentPayment = partyPayments.length > 0 ? partyPayments[0] : null;
+  const recentPaymentAmount = recentPayment ? recentPayment.amount : 0;
+  const pendingBalance = balanceInfo.currentBalance;
+  const lastBalance = pendingBalance + recentPaymentAmount;
 
   return (
-    `*Login Smart Technology Ledger Statement*\n` +
-    `Party: *${party.name}*\n` +
-    `Date: ${formatDateDisplay(getTodayDateString())}\n` +
-    `Total Invoices: ${formatPKR(periodLedger.periodInvoicesTotal)}\n` +
-    `Total Payments: ${formatPKR(periodLedger.periodPaymentsTotal)}\n` +
-    `*Remaining Amount: ${periodLedger.isClosingAdvance ? `(Advance: ${formatPKR(Math.abs(periodLedger.closingBalance))})` : formatPKR(periodLedger.closingBalance)}*`
+    `Party: ${party.name}\n\n` +
+    `Last Balance: ${formatPKR(lastBalance)}\n` +
+    `Recent Payment: ${formatPKR(recentPaymentAmount)}\n` +
+    `Pending Balance: ${formatPKR(pendingBalance)}`
   );
 }
 
 /**
- * Shares party ledger as a readable WhatsApp TEXT message directly to the party's saved phone number.
+ * Shares party ledger as a readable plain-text WhatsApp message directly to the party's saved phone number.
  * Strictly does NOT generate, attach, or download any PDF.
  */
 export async function sharePartyLedger(
   party: Party,
   invoices: PartyInvoice[],
-  payments: PartyPayment[],
-  _salesmanName = 'Sales Representative',
-  startDate?: string,
-  endDate?: string
+  payments: PartyPayment[]
 ): Promise<ShareResult> {
-  const summaryText = buildLedgerSummaryText(party, invoices, payments, startDate, endDate);
+  const summaryText = buildLedgerSummaryText(party, invoices, payments);
 
   // If party has a saved phone number, open WhatsApp directly for that phone number
   if (party.phone && party.phone.trim().length > 0) {

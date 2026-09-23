@@ -22,7 +22,7 @@ import {
   formatDateDisplay,
   getTodayDateString,
 } from '../services/accounting';
-import { downloadPartyLedgerPDF } from '../services/pdf';
+import { exportPartyLedgerPDF } from '../services/pdf';
 import { sharePartyLedger } from '../services/share';
 
 const getFirstDayOfMonth = () => {
@@ -92,14 +92,19 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
   const timeline = getPartyLedgerTimeline(party.id, invoices, partyPayments);
   const balanceInfo = calculatePartyBalance(party.id, invoices, partyPayments);
 
-  const handleExportPDF = async (customStart?: string, customEnd?: string) => {
+  const handleExportPDF = async (
+    destination: 'mobile' | 'whatsapp',
+    customStart?: string,
+    customEnd?: string
+  ) => {
     setSharing(true);
     setShareFeedback(null);
     try {
-      const res = await downloadPartyLedgerPDF(
+      const res = await exportPartyLedgerPDF(
         party,
         invoices,
         partyPayments,
+        destination,
         undefined,
         customStart,
         customEnd
@@ -110,28 +115,24 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
       }
       setIsExportModalOpen(false);
     } catch (err: any) {
-      setShareFeedback('Failed to export PDF.');
+      setShareFeedback(
+        destination === 'whatsapp'
+          ? 'Failed to share PDF attachment on WhatsApp.'
+          : 'Failed to save PDF to Mobile.'
+      );
       setTimeout(() => setShareFeedback(null), 3000);
     } finally {
       setSharing(false);
     }
   };
 
-  const handleShareWhatsApp = async (customStart?: string, customEnd?: string) => {
+  const handleNormalShareWhatsApp = async () => {
     setSharing(true);
     setShareFeedback(null);
     try {
-      const res = await sharePartyLedger(
-        party,
-        invoices,
-        partyPayments,
-        undefined,
-        customStart,
-        customEnd
-      );
+      const res = await sharePartyLedger(party, invoices, partyPayments);
       setShareFeedback(res.message);
       setTimeout(() => setShareFeedback(null), 4000);
-      setIsExportModalOpen(false);
     } catch (err: any) {
       setShareFeedback('Could not trigger share.');
       setTimeout(() => setShareFeedback(null), 3000);
@@ -255,7 +256,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </button>
 
           <button
-            onClick={() => handleShareWhatsApp()}
+            onClick={() => handleNormalShareWhatsApp()}
             disabled={sharing}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-sky-50 hover:bg-sky-100 active:bg-sky-200 text-sky-900 border border-sky-200 transition disabled:opacity-50"
           >
@@ -650,39 +651,76 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="space-y-2 pt-2">
-                <button
-                  type="button"
-                  disabled={sharing || isDateRangeInvalid}
-                  onClick={() => {
-                    if (exportMode === 'range') {
-                      handleExportPDF(startDate, endDate);
-                    } else {
-                      handleExportPDF();
-                    }
-                  }}
-                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>{sharing ? 'Generating PDF...' : 'Download PDF Statement'}</span>
-                </button>
+              {/* Destination Choice Section */}
+              <div className="pt-2 space-y-2.5">
+                <div className="text-center">
+                  <span className="text-xs font-bold text-slate-800 block">
+                    Where do you want to send/save this PDF?
+                  </span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">
+                    Choose your destination below
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  disabled={sharing || isDateRangeInvalid}
-                  onClick={() => {
-                    if (exportMode === 'range') {
-                      handleShareWhatsApp(startDate, endDate);
-                    } else {
-                      handleShareWhatsApp();
-                    }
-                  }}
-                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>{sharing ? 'Sharing...' : 'Share on WhatsApp'}</span>
-                </button>
+                <div className="space-y-2">
+                  {/* Option A: Save to Mobile */}
+                  <button
+                    type="button"
+                    disabled={sharing || isDateRangeInvalid}
+                    onClick={() => {
+                      if (exportMode === 'range') {
+                        handleExportPDF('mobile', startDate, endDate);
+                      } else {
+                        handleExportPDF('mobile');
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                  >
+                    <div className="flex items-center space-x-2.5 text-left">
+                      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sky-400 shrink-0">
+                        <Download className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="block font-bold">Save to Mobile</span>
+                        <span className="text-[10px] text-slate-300 font-normal">
+                          Saves actual PDF in &ldquo;Smart Technology&rdquo; folder
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-sky-400 font-bold ml-2 shrink-0">
+                      {sharing ? 'Saving...' : 'Save →'}
+                    </span>
+                  </button>
+
+                  {/* Option B: Send on WhatsApp */}
+                  <button
+                    type="button"
+                    disabled={sharing || isDateRangeInvalid}
+                    onClick={() => {
+                      if (exportMode === 'range') {
+                        handleExportPDF('whatsapp', startDate, endDate);
+                      } else {
+                        handleExportPDF('whatsapp');
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                  >
+                    <div className="flex items-center space-x-2.5 text-left">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-700/80 flex items-center justify-center text-white shrink-0">
+                        <Share2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="block font-bold">Send on WhatsApp</span>
+                        <span className="text-[10px] text-emerald-100 font-normal">
+                          Attaches actual PDF statement file to WhatsApp
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-emerald-100 font-bold ml-2 shrink-0">
+                      {sharing ? 'Attaching...' : 'Send →'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

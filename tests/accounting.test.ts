@@ -656,6 +656,49 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(pdfText).toContain('Closing Balance');
       expect(pdfText).toContain('10/09/2026 to 15/09/2026');
     });
+
+    it('builds short, plain-text WhatsApp message with exact 4 fields: Party, Last Balance, Recent Payment, Pending Balance', async () => {
+      const { buildLedgerSummaryText } = await import('../src/services/share');
+      const partyObj: Party = {
+        id: 'party-abc',
+        name: 'ABC Traders',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+      };
+      const invList: PartyInvoice[] = [
+        {
+          id: 'inv-1',
+          invoiceNumber: 'INV-100',
+          partyId: partyObj.id,
+          partyName: partyObj.name,
+          date: '2026-09-01',
+          amount: 5000,
+          createdAt: '2026-09-01T10:00:00Z',
+          updatedAt: '2026-09-01T10:00:00Z',
+        },
+      ];
+      const pmtList: PartyPayment[] = [
+        {
+          id: 'pmt-1',
+          partyId: partyObj.id,
+          partyName: partyObj.name,
+          date: '2026-09-02',
+          amount: 1000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-02T10:00:00Z',
+          updatedAt: '2026-09-02T10:00:00Z',
+        },
+      ];
+
+      const text = buildLedgerSummaryText(partyObj, invList, pmtList);
+      expect(text).toContain('Party: ABC Traders');
+      expect(text).toContain('Last Balance: Rs 5,000');
+      expect(text).toContain('Recent Payment: Rs 1,000');
+      expect(text).toContain('Pending Balance: Rs 4,000');
+      // Verify strictly NO long lists or extra tables in normal share text
+      expect(text).not.toContain('Total Invoices:');
+      expect(text).not.toContain('Opening Balance:');
+    });
   });
 });
 

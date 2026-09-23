@@ -318,9 +318,10 @@ export interface SavePDFResult {
 }
 
 /**
- * Saves a PDF to the local device storage on Android/Native or triggers download in browser
+ * Saves a PDF to the local device storage under the 'Smart Technology' folder on Android
+ * or triggers file download in desktop browser.
  */
-export async function saveOrDownloadPDF(
+export async function savePDFToMobile(
   blob: Blob,
   filename: string
 ): Promise<SavePDFResult> {
@@ -331,45 +332,32 @@ export async function saveOrDownloadPDF(
 
       try {
         const saved = await Filesystem.writeFile({
-          path: filename,
-          data: base64Data,
-          directory: Directory.Cache,
-          recursive: true,
-        });
-        fileUri = saved.uri;
-      } catch {
-        const saved = await Filesystem.writeFile({
-          path: filename,
+          path: `Smart Technology/${filename}`,
           data: base64Data,
           directory: Directory.Documents,
           recursive: true,
         });
         fileUri = saved.uri;
-      }
-
-      // Open Android native Save / Export sheet (Downloads, Drive, Acrobat, Print, Files, etc.)
-      try {
-        await Share.share({
-          title: filename,
-          url: fileUri,
-          dialogTitle: 'Save / Export PDF Statement',
+      } catch {
+        const saved = await Filesystem.writeFile({
+          path: `Smart Technology/${filename}`,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
         });
-      } catch (shareErr: any) {
-        if (shareErr?.name !== 'AbortError') {
-          console.warn('Share sheet dismissed or error:', shareErr);
-        }
+        fileUri = saved.uri;
       }
 
       return {
         success: true,
         path: fileUri,
-        message: `PDF exported successfully (${filename})`,
+        message: `PDF saved successfully to Smart Technology/${filename}`,
       };
     } catch (err: any) {
-      console.error('Failed to export PDF locally:', err);
+      console.error('Failed to save PDF locally:', err);
       return {
         success: false,
-        message: `Failed to export PDF: ${err.message || err}`,
+        message: `Failed to save PDF: ${err.message || err}`,
       };
     }
   } else {
@@ -384,13 +372,116 @@ export async function saveOrDownloadPDF(
     URL.revokeObjectURL(url);
     return {
       success: true,
-      message: 'PDF download started.',
+      message: `PDF downloaded: ${filename}`,
     };
   }
 }
 
 /**
- * Trigger download/save of the generated Party Ledger PDF
+ * Shares the actual generated PDF as a FILE ATTACHMENT on WhatsApp (Strictly NO text-ledger).
+ */
+export async function sharePDFOnWhatsApp(
+  blob: Blob,
+  filename: string,
+  _partyPhone?: string
+): Promise<SavePDFResult> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const base64Data = await blobToBase64(blob);
+      let fileUri = '';
+
+      try {
+        const saved = await Filesystem.writeFile({
+          path: `Smart Technology/${filename}`,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+        fileUri = saved.uri;
+      } catch {
+        const saved = await Filesystem.writeFile({
+          path: `Smart Technology/${filename}`,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true,
+        });
+        fileUri = saved.uri;
+      }
+
+      // Invoke Android native share sheet to attach the actual PDF file to WhatsApp
+      try {
+        await Share.share({
+          title: filename,
+          url: fileUri,
+          dialogTitle: 'Send PDF on WhatsApp',
+        });
+      } catch (shareErr: any) {
+        if (shareErr?.name !== 'AbortError') {
+          console.warn('WhatsApp PDF share dismissed or error:', shareErr);
+        }
+      }
+
+      return {
+        success: true,
+        path: fileUri,
+        message: 'Opening WhatsApp to send PDF attachment...',
+      };
+    } catch (err: any) {
+      console.error('Failed to share PDF on WhatsApp:', err);
+      return {
+        success: false,
+        message: `Failed to share PDF on WhatsApp: ${err.message || err}`,
+      };
+    }
+  } else {
+    // Desktop / Browser fallback
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    return {
+      success: true,
+      message: 'PDF downloaded for WhatsApp attachment.',
+    };
+  }
+}
+
+/**
+ * General PDF saving helper (delegates to savePDFToMobile)
+ */
+export async function saveOrDownloadPDF(
+  blob: Blob,
+  filename: string
+): Promise<SavePDFResult> {
+  return await savePDFToMobile(blob, filename);
+}
+
+/**
+ * Exports Party Ledger PDF with the selected destination: 'mobile' (Save to Mobile) or 'whatsapp' (Send on WhatsApp)
+ */
+export async function exportPartyLedgerPDF(
+  party: Party,
+  invoices: PartyInvoice[],
+  payments: PartyPayment[],
+  destination: 'mobile' | 'whatsapp',
+  salesmanName?: string,
+  startDate?: string,
+  endDate?: string
+): Promise<SavePDFResult> {
+  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName, startDate, endDate);
+  if (destination === 'whatsapp') {
+    return await sharePDFOnWhatsApp(pdfBlob, filename, party.phone);
+  }
+  return await savePDFToMobile(pdfBlob, filename);
+}
+
+/**
+ * Trigger download/save of the generated Party Ledger PDF (legacy/direct helper)
  */
 export async function downloadPartyLedgerPDF(
   party: Party,
@@ -400,8 +491,7 @@ export async function downloadPartyLedgerPDF(
   startDate?: string,
   endDate?: string
 ): Promise<SavePDFResult> {
-  const { pdfBlob, filename } = generatePartyLedgerPDF(party, invoices, payments, salesmanName, startDate, endDate);
-  return await saveOrDownloadPDF(pdfBlob, filename);
+  return await exportPartyLedgerPDF(party, invoices, payments, 'mobile', salesmanName, startDate, endDate);
 }
 
 /**
