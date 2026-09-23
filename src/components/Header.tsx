@@ -30,7 +30,13 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md border-b border-slate-800">
+    <header
+      className="sticky top-0 z-30 bg-slate-900 text-white shadow-md border-b border-slate-800 pt-safe"
+      style={{
+        top: 0,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+      }}
+    >
       <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {onBack && (

@@ -56,7 +56,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg pb-safe">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg pb-safe"
+      style={{
+        bottom: 0,
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <div className="max-w-md mx-auto grid grid-cols-6 h-16">
         {tabs.map((tab) => {
           const Icon = tab.icon;

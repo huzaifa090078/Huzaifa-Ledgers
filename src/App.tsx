@@ -330,7 +330,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-sky-600 selection:text-white">
+    <div className="min-h-full flex-1 bg-slate-100 flex flex-col selection:bg-sky-600 selection:text-white">
 
       {/* Main Content Area constrained to mobile width */}
       <main className="flex-1 w-full max-w-md mx-auto px-3.5 pt-3.5 pb-20">
