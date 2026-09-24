@@ -83,7 +83,7 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
 
   const payload: BackupDataPayload = {
     backupFormatVersion: 1,
-    appVersion: '1.1',
+    appVersion: '1.2',
     databaseVersion: 2,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -314,7 +314,7 @@ export function validateBackupPayload(data: any): { valid: boolean; normalized?:
 
   const normalized: BackupDataPayload = {
     backupFormatVersion: data.backupFormatVersion || data.version || 1,
-    appVersion: data.appVersion || '1.1',
+    appVersion: data.appVersion || '1.2',
     databaseVersion: data.databaseVersion || 2,
     createdAt: data.createdAt || data.updatedAt || new Date().toISOString(),
     updatedAt: data.updatedAt || data.exportedAt || new Date().toISOString(),

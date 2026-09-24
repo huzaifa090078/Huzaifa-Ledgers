@@ -6,6 +6,8 @@ import {
   calculateAnalytics,
   formatPKR,
   getPartyLedgerTimeline,
+  formatLocalTimestamp,
+  formatLocalTime,
 } from '../src/services/accounting';
 
 describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
@@ -698,6 +700,32 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       // Verify strictly NO long lists or extra tables in normal share text
       expect(text).not.toContain('Total Invoices:');
       expect(text).not.toContain('Opening Balance:');
+    });
+  });
+
+  describe('Local Timezone & Timestamp Formatting (Asia/Karachi UTC+05:00)', () => {
+    it('correctly converts UTC ISO string to PKT date and 12-hour time', () => {
+      // 11:10 UTC -> 16:10 (04:10 PM) PKT
+      const formatted = formatLocalTimestamp('2026-09-24T11:10:00.000Z');
+      expect(formatted).toBe('24-09-2026 04:10 PM');
+    });
+
+    it('correctly handles midnight date rollover to next day in PKT', () => {
+      // 20:30 UTC on 24th -> +5h = 01:30 AM on 25th in PKT
+      const formatted = formatLocalTimestamp('2026-09-24T20:30:00.000Z');
+      expect(formatted).toBe('25-09-2026 01:30 AM');
+    });
+
+    it('returns empty string for undefined, empty or invalid timestamps', () => {
+      expect(formatLocalTimestamp(undefined)).toBe('');
+      expect(formatLocalTimestamp('')).toBe('');
+      expect(formatLocalTimestamp('invalid-date')).toBe('');
+    });
+
+    it('correctly formats local time only', () => {
+      expect(formatLocalTime('2026-09-24T11:10:00.000Z')).toBe('04:10 PM');
+      expect(formatLocalTime('2026-09-24T05:00:00.000Z')).toBe('10:00 AM');
+      expect(formatLocalTime('')).toBe('');
     });
   });
 });

@@ -47,6 +47,50 @@ export function formatDateDisplay(dateStr?: string): string {
 }
 
 /**
+ * Format ISO-8601 UTC timestamp to Pakistan Local Date & Time (Asia/Karachi, UTC+05:00)
+ * Example: '2026-09-24T11:10:00.000Z' -> '24-09-2026 04:10 PM'
+ * Reliably handles midnight/date rollover without manual math hacks.
+ */
+export function formatLocalTimestamp(isoStr?: string): string {
+  if (!isoStr) return '';
+  const dateObj = new Date(isoStr);
+  if (isNaN(dateObj.getTime())) return '';
+
+  const datePart = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Karachi',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(dateObj).replace(/\//g, '-');
+
+  const timePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Karachi',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(dateObj);
+
+  return `${datePart} ${timePart}`;
+}
+
+/**
+ * Format ISO-8601 UTC timestamp to Pakistan Local Time only (Asia/Karachi, UTC+05:00)
+ * Example: '2026-09-24T11:10:00.000Z' -> '04:10 PM'
+ */
+export function formatLocalTime(isoStr?: string): string {
+  if (!isoStr) return '';
+  const dateObj = new Date(isoStr);
+  if (isNaN(dateObj.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Karachi',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(dateObj);
+}
+
+/**
  * Get current date in Pakistan local time in YYYY-MM-DD machine format
  */
 export function getTodayDateString(): string {

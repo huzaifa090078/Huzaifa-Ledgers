@@ -19,6 +19,7 @@ import {
   formatPKR,
   formatDateDisplay,
   getTodayDateString,
+  formatLocalTime,
 } from '../services/accounting';
 import { downloadDailyCollectionPDF } from '../services/pdf';
 
@@ -439,7 +440,7 @@ export const DailyCollection: React.FC<DailyCollectionProps> = ({
                         {p.createdAt && (
                           <span className="flex items-center">
                             <Clock className="w-2.5 h-2.5 mr-0.5" />
-                            {p.createdAt.split('T')[1]?.substring(0, 5) || ''}
+                            {formatLocalTime(p.createdAt)}
                           </span>
                         )}
                       </div>

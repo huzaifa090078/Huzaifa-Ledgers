@@ -14,6 +14,7 @@ import {
   formatPKR,
   formatDateDisplay,
   getTodayDateString,
+  formatLocalTime,
 } from './accounting';
 
 export interface PDFExportResult {
@@ -583,7 +584,7 @@ export function generateDailyCollectionPDF(
   // 3. Table of Party Payments
   const partyRows = collection.payments.map((p, idx) => {
     const methodLabel = p.paymentMethod === 'Bank' ? 'Bank Account' : p.paymentMethod;
-    const timeStr = p.createdAt ? p.createdAt.split('T')[1]?.substring(0, 5) : '';
+    const timeStr = p.createdAt ? formatLocalTime(p.createdAt) : '';
     const dateTimeStr = timeStr ? `${formatDateDisplay(p.date)} ${timeStr}` : formatDateDisplay(p.date);
     const refOrNote = [p.reference ? `Ref: ${p.reference}` : '', p.note ? p.note : '']
       .filter(Boolean)

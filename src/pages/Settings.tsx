@@ -21,7 +21,7 @@ import {
   type BackupDataPayload,
 } from '../services/backup';
 import { clearAllData, db, generateId } from '../db';
-import { getTodayDateString, formatDateDisplay } from '../services/accounting';
+import { getTodayDateString, formatLocalTimestamp } from '../services/accounting';
 import {
   getAutoBackupStatus,
   performAutoBackup,
@@ -388,8 +388,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <div className="flex justify-between items-center border-t border-slate-200/80 pt-1.5 mt-1">
               <span className="text-slate-500 font-medium">Last Local Backup:</span>
               <span className="font-semibold text-slate-800">
-                {formatDateDisplay(backupStatus.lastBackupTime.split('T')[0])}{' '}
-                {backupStatus.lastBackupTime.split('T')[1]?.substring(0, 5) || ''}
+                {formatLocalTimestamp(backupStatus.lastBackupTime)}
               </span>
             </div>
           )}
@@ -543,7 +542,7 @@ export const Settings: React.FC<SettingsProps> = ({
           • No internet connection, cloud server, or third-party tracking is used.
         </p>
         <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-200 flex items-center justify-between">
-          <span>Login Smart Technology Business Ledger v1.1.0</span>
+          <span>Login Smart Technology Business Ledger v1.2.0</span>
           <span>100% Offline App</span>
         </div>
       </div>
@@ -570,8 +569,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
               <div className="font-semibold text-slate-800">
                 Backup Date:{' '}
-                {formatDateDisplay((pendingRestorePayload.updatedAt || pendingRestorePayload.createdAt || '').split('T')[0])}{' '}
-                {(pendingRestorePayload.updatedAt || pendingRestorePayload.createdAt || '').split('T')[1]?.substring(0, 5) || ''}
+                {formatLocalTimestamp(pendingRestorePayload.updatedAt || pendingRestorePayload.createdAt)}
               </div>
               <div className="text-slate-600">
                 • {pendingRestorePayload.parties?.length || 0} Parties
