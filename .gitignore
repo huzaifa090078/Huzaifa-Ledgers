@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 *.apk
+*.keystore
+*.jks
+ledger-release.keystore
 
 # Editor directories and files
 .vscode/*

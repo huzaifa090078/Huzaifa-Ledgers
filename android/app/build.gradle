@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
+def ledgerKeystoreFile = file('ledger-release.keystore')
+def ledgerKeystorePassword = localProperties.getProperty('LEDGER_KEYSTORE_PASSWORD') ?: System.getenv('LEDGER_KEYSTORE_PASSWORD') ?: ''
+def ledgerKeyPassword = localProperties.getProperty('LEDGER_KEY_PASSWORD') ?: System.getenv('LEDGER_KEY_PASSWORD') ?: ''
+
 android {
     namespace "com.smarttech.ledger"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +17,8 @@ android {
         applicationId "com.smarttech.ledger"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +26,28 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        ledgerConfig {
+            if (ledgerKeystoreFile.exists()) {
+                storeFile ledgerKeystoreFile
+                storePassword ledgerKeystorePassword
+                keyAlias 'ledger'
+                keyPassword ledgerKeyPassword
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (ledgerKeystoreFile.exists() && ledgerKeystorePassword) {
+                signingConfig signingConfigs.ledgerConfig
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (ledgerKeystoreFile.exists() && ledgerKeystorePassword) {
+                signingConfig signingConfigs.ledgerConfig
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import { db } from './db';
 import type { Party, PartyInvoice, PartyPayment, CompanyPayment, DailyReconciliation } from './types';
 import type { NavTab } from './components/BottomNav';
 import { BottomNav } from './components/BottomNav';
+import { initAutoBackupSystem } from './services/autoBackup';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -199,6 +200,11 @@ export const App: React.FC = () => {
       }
     };
   }, [handleBack]);
+
+  // Initialize automatic local and cloud backup engine on mount
+  useEffect(() => {
+    initAutoBackupSystem();
+  }, []);
 
   // Selected Party object if in party detail view
   const selectedParty = selectedPartyId ? parties.find((p) => p.id === selectedPartyId) : null;

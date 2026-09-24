@@ -332,7 +332,7 @@ export async function savePDFToMobile(
 
       try {
         const saved = await Filesystem.writeFile({
-          path: `Smart Technology/${filename}`,
+          path: `Smart Technology/Data/${filename}`,
           data: base64Data,
           directory: Directory.Documents,
           recursive: true,
@@ -340,7 +340,7 @@ export async function savePDFToMobile(
         fileUri = saved.uri;
       } catch {
         const saved = await Filesystem.writeFile({
-          path: `Smart Technology/${filename}`,
+          path: `Smart Technology/Data/${filename}`,
           data: base64Data,
           directory: Directory.Cache,
           recursive: true,
@@ -351,7 +351,7 @@ export async function savePDFToMobile(
       return {
         success: true,
         path: fileUri,
-        message: `PDF saved successfully to Smart Technology/${filename}`,
+        message: `PDF saved successfully to Smart Technology/Data/${filename}`,
       };
     } catch (err: any) {
       console.error('Failed to save PDF locally:', err);
@@ -392,7 +392,7 @@ export async function sharePDFOnWhatsApp(
 
       try {
         const saved = await Filesystem.writeFile({
-          path: `Smart Technology/${filename}`,
+          path: `Smart Technology/Data/${filename}`,
           data: base64Data,
           directory: Directory.Cache,
           recursive: true,
@@ -400,7 +400,7 @@ export async function sharePDFOnWhatsApp(
         fileUri = saved.uri;
       } catch {
         const saved = await Filesystem.writeFile({
-          path: `Smart Technology/${filename}`,
+          path: `Smart Technology/Data/${filename}`,
           data: base64Data,
           directory: Directory.Documents,
           recursive: true,
