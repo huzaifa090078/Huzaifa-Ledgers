@@ -8,7 +8,7 @@ import {
   ChevronRight,
   Scale,
 } from 'lucide-react';
-import type { Party, PartyInvoice, PartyPayment, CompanyPayment, DateFilterType } from '../types';
+import type { Party, PartyInvoice, PartyPayment, CompanyPayment, Company, CompanyInvoice, DateFilterType } from '../types';
 import {
   calculateAnalytics,
   calculatePartyBalance,
@@ -21,6 +21,8 @@ interface AnalyticsProps {
   invoices: PartyInvoice[];
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
+  companies?: Company[];
+  companyInvoices?: CompanyInvoice[];
   onSelectParty: (partyId: string) => void;
 }
 
@@ -29,6 +31,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({
   invoices,
   partyPayments,
   companyPayments,
+  companies = [],
+  companyInvoices = [],
   onSelectParty,
 }) => {
   const [period, setPeriod] = useState<DateFilterType>('all');
@@ -44,9 +48,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({
       companyPayments,
       period,
       customStart,
-      customEnd
+      customEnd,
+      companies,
+      companyInvoices
     );
-  }, [parties, invoices, partyPayments, companyPayments, period, customStart, customEnd]);
+  }, [parties, invoices, partyPayments, companyPayments, period, customStart, customEnd, companies, companyInvoices]);
 
   // Party-wise outstanding balances
   const partyList = useMemo(() => {
@@ -252,7 +258,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
           <div className="flex items-center space-x-1.5">
             <Building2 className="w-4 h-4 text-indigo-600" />
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider m-0">
-              Login Smart Technology Position
+              Companies / Suppliers Position
             </h3>
           </div>
           <span className="text-[10px] text-slate-400">Company Account</span>

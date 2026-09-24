@@ -1,5 +1,5 @@
-import type { Party, PartyInvoice, PartyPayment } from '../types';
-import { calculatePartyBalance, formatPKR } from './accounting';
+import type { Party, PartyInvoice, PartyPayment, Company, CompanyInvoice, CompanyPayment } from '../types';
+import { calculatePartyBalance, calculateSingleCompanyBalance, formatPKR } from './accounting';
 
 export interface ShareResult {
   sharedViaWebShare: boolean;
@@ -85,6 +85,113 @@ export async function sharePartyLedger(
     try {
       await navigator.share({
         title: `Ledger - ${party.name}`,
+        text: summaryText,
+      });
+      return {
+        sharedViaWebShare: true,
+        downloadTriggered: false,
+        message: 'Ledger text shared successfully.',
+      };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return {
+          sharedViaWebShare: false,
+          downloadTriggered: false,
+          message: 'Share cancelled.',
+        };
+      }
+    }
+  }
+
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(summaryText)}`;
+  const win = window.open(waUrl, '_blank');
+  if (!win) {
+    window.location.href = waUrl;
+  }
+
+  return {
+    sharedViaWebShare: true,
+    downloadTriggered: false,
+    message: 'Opening WhatsApp...',
+  };
+}
+
+/**
+ * Builds short, simple plain-text WhatsApp message for company ledger summary.
+ * Format:
+ * Company: {Company Name}
+ *
+ * Last Balance: Rs. {amount}
+ * Recent Payment: Rs. {amount}
+ * Pending Balance: Rs. {amount}
+ */
+export function buildCompanyLedgerSummaryText(
+  company: { name: string; id: string },
+  invoices: CompanyInvoice[],
+  payments: CompanyPayment[]
+): string {
+  const balanceInfo = calculateSingleCompanyBalance(company.id, invoices, payments);
+
+  // Find most recent payment for this company
+  const companyPayments = payments
+    .filter((p) => p.companyId === company.id)
+    .sort((a, b) => {
+      const dateCompare = (b.date || '').localeCompare(a.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+  const recentPayment = companyPayments.length > 0 ? companyPayments[0] : null;
+  const recentPaymentAmount = recentPayment ? recentPayment.amount : 0;
+  const pendingBalance = balanceInfo.currentBalance;
+  const lastBalance = pendingBalance + recentPaymentAmount;
+
+  return (
+    `Company: ${company.name}\n\n` +
+    `Last Balance: ${formatPKR(lastBalance)}\n` +
+    `Recent Payment: ${formatPKR(recentPaymentAmount)}\n` +
+    `Pending Balance: ${formatPKR(pendingBalance)}`
+  );
+}
+
+/**
+ * Shares company ledger as a readable plain-text WhatsApp message directly to the company's saved phone number.
+ */
+export async function shareCompanyLedger(
+  company: Company,
+  invoices: CompanyInvoice[],
+  payments: CompanyPayment[]
+): Promise<ShareResult> {
+  const summaryText = buildCompanyLedgerSummaryText(company, invoices, payments);
+
+  // If company has a saved phone number, open WhatsApp directly for that phone number
+  if (company.phone && company.phone.trim().length > 0) {
+    const rawDigits = company.phone.replace(/[^0-9]/g, '');
+    const cleanPhone = rawDigits.startsWith('92')
+      ? rawDigits
+      : rawDigits.startsWith('0')
+      ? '92' + rawDigits.substring(1)
+      : rawDigits;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(summaryText)}`;
+
+    const win = window.open(waUrl, '_blank');
+    if (!win) {
+      window.location.href = waUrl;
+    }
+
+    return {
+      sharedViaWebShare: true,
+      downloadTriggered: false,
+      message: 'Opening WhatsApp chat...',
+    };
+  }
+
+  // Fallback if company has no phone number: use Web Share API or generic WhatsApp link
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title: `Ledger - ${company.name}`,
         text: summaryText,
       });
       return {

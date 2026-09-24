@@ -131,6 +131,8 @@ export async function initAutoBackupSystem(): Promise<void> {
       db.partyPayments,
       db.companyPayments,
       db.dailyReconciliations,
+      db.companies,
+      db.companyInvoices,
       db.settings,
     ];
 

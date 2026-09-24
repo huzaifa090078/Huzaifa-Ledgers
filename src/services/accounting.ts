@@ -3,8 +3,13 @@ import type {
   PartyInvoice,
   PartyPayment,
   CompanyPayment,
+  Company,
+  CompanyInvoice,
   PartyLedgerEntry,
+  CompanyLedgerEntry,
   CompanyBalanceSummary,
+  IndividualCompanyBalanceSummary,
+  CompanyPeriodLedger,
   AnalyticsSummary,
   RecentTransactionItem,
   DateFilterType,
@@ -324,6 +329,191 @@ export function calculateCompanyBalance(
 }
 
 /**
+ * Calculate balance summary for an individual company in the Universal Company Ledger system.
+ * Purchases/Invoices received increase amount payable (we owe the company).
+ * Payments made decrease amount payable.
+ * Outstanding = totalInvoices - totalPayments.
+ * If totalPayments > totalInvoices, it is an advance payment (isAdvance = true).
+ */
+export function calculateSingleCompanyBalance(
+  companyId: string,
+  allInvoices: CompanyInvoice[],
+  allPayments: CompanyPayment[]
+): IndividualCompanyBalanceSummary {
+  const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
+  const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
+
+  const totalInvoices = companyInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+  const totalPayments = companyPayments.reduce((sum, pmt) => sum + (Number(pmt.amount) || 0), 0);
+
+  const rawDifference = totalInvoices - totalPayments;
+  const isAdvance = rawDifference < 0;
+  const currentBalance = isAdvance ? 0 : rawDifference;
+  const advanceAmount = isAdvance ? Math.abs(rawDifference) : 0;
+
+  // Find most recent activity date
+  const allDates = [
+    ...companyInvoices.map((i) => i.date),
+    ...companyPayments.map((p) => p.date),
+  ].sort((a, b) => b.localeCompare(a));
+  const lastActivityDate = allDates.length > 0 ? allDates[0] : undefined;
+
+  return {
+    companyId,
+    companyName: companyInvoices[0]?.companyName || companyPayments[0]?.companyName || '',
+    totalInvoices,
+    totalPayments,
+    currentBalance,
+    isAdvance,
+    advanceAmount,
+    lastActivityDate,
+  };
+}
+
+/**
+ * Build chronological ledger timeline for a company with running balances.
+ * Purchases/Invoices add to payable balance (Debit).
+ * Payments subtract from payable balance (Credit).
+ */
+export function getCompanyLedgerTimeline(
+  companyId: string,
+  allInvoices: CompanyInvoice[],
+  allPayments: CompanyPayment[]
+): { entries: CompanyLedgerEntry[]; finalBalance: number; totalDebit: number; totalCredit: number } {
+  const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
+  const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
+
+  type RawCompanyItem =
+    | { kind: 'inv'; data: CompanyInvoice; date: string; time: string }
+    | { kind: 'pmt'; data: CompanyPayment; date: string; time: string };
+
+  const rawList: RawCompanyItem[] = [
+    ...companyInvoices.map((inv) => ({
+      kind: 'inv' as const,
+      data: inv,
+      date: inv.date,
+      time: inv.createdAt || inv.date,
+    })),
+    ...companyPayments.map((pmt) => ({
+      kind: 'pmt' as const,
+      data: pmt,
+      date: pmt.date,
+      time: pmt.createdAt || pmt.date,
+    })),
+  ];
+
+  // Sort ascending by date, then by creation time
+  rawList.sort((a, b) => {
+    if (a.date !== b.date) {
+      return a.date.localeCompare(b.date);
+    }
+    return a.time.localeCompare(b.time);
+  });
+
+  let runningBalance = 0;
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  const entries: CompanyLedgerEntry[] = rawList.map((item) => {
+    if (item.kind === 'inv') {
+      const inv = item.data;
+      const debit = Number(inv.amount) || 0;
+      totalDebit += debit;
+      runningBalance += debit;
+      return {
+        id: inv.id,
+        date: inv.date,
+        type: 'invoice',
+        description: `Purchase / Bill #${inv.invoiceNumber}${inv.description ? ` - ${inv.description}` : ''}`,
+        debit,
+        credit: 0,
+        balance: runningBalance,
+        invoiceNumber: inv.invoiceNumber,
+        rawItem: inv,
+      };
+    } else {
+      const pmt = item.data;
+      const credit = Number(pmt.amount) || 0;
+      totalCredit += credit;
+      runningBalance -= credit;
+      return {
+        id: pmt.id,
+        date: pmt.date,
+        type: 'payment',
+        description: `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
+        debit: 0,
+        credit,
+        balance: runningBalance,
+        paymentMethod: pmt.paymentMethod,
+        rawItem: pmt,
+      };
+    }
+  });
+
+  return {
+    entries,
+    finalBalance: runningBalance,
+    totalDebit,
+    totalCredit,
+  };
+}
+
+/**
+ * Calculates company ledger transactions and balances for a specific date range.
+ * - Opening balance is calculated from all transactions strictly prior to startDate.
+ * - Only transactions between startDate and endDate (inclusive) are returned in entries.
+ * - Closing balance = Opening Balance + Period Purchases - Period Payments.
+ * - If no startDate is specified, it returns the full ledger.
+ */
+export function calculateCompanyPeriodLedger(
+  companyId: string,
+  allInvoices: CompanyInvoice[],
+  allPayments: CompanyPayment[],
+  startDate?: string,
+  endDate?: string
+): CompanyPeriodLedger {
+  const fullTimeline = getCompanyLedgerTimeline(companyId, allInvoices, allPayments);
+  const isDateRange = Boolean(startDate || endDate);
+
+  // Transactions before startDate
+  const priorEntries = startDate
+    ? fullTimeline.entries.filter((e) => e.date < startDate)
+    : [];
+
+  const priorDebits = priorEntries.reduce((sum, e) => sum + e.debit, 0);
+  const priorCredits = priorEntries.reduce((sum, e) => sum + e.credit, 0);
+  const openingBalance = priorDebits - priorCredits;
+  const isOpeningAdvance = openingBalance < 0;
+
+  // Transactions in the period [startDate, endDate]
+  const periodEntries = fullTimeline.entries.filter((entry) => {
+    if (startDate && entry.date < startDate) return false;
+    if (endDate && entry.date > endDate) return false;
+    return true;
+  });
+
+  const periodInvoicesTotal = periodEntries.reduce((sum, e) => sum + e.debit, 0);
+  const periodPaymentsTotal = periodEntries.reduce((sum, e) => sum + e.credit, 0);
+
+  // Closing balance = Opening Balance + Period Purchases - Period Payments
+  const closingBalance = openingBalance + periodInvoicesTotal - periodPaymentsTotal;
+  const isClosingAdvance = closingBalance < 0;
+
+  return {
+    startDate,
+    endDate,
+    isDateRange,
+    openingBalance,
+    isOpeningAdvance,
+    periodInvoicesTotal,
+    periodPaymentsTotal,
+    closingBalance,
+    isClosingAdvance,
+    entries: periodEntries,
+  };
+}
+
+/**
  * Helper to check if a date falls within the selected period filter
  */
 export function isDateInFilter(
@@ -383,7 +573,9 @@ export function calculateAnalytics(
   companyPayments: CompanyPayment[],
   period: DateFilterType = 'all',
   customStart?: string,
-  customEnd?: string
+  customEnd?: string,
+  companies?: Company[],
+  companyInvoices?: CompanyInvoice[]
 ): AnalyticsSummary {
   const todayStr = getTodayDateString();
 
@@ -396,6 +588,11 @@ export function calculateAnalytics(
   );
   const filteredCompanyPayments = companyPayments.filter((c) =>
     isDateInFilter(c.date, period, customStart, customEnd)
+  );
+
+  const hasUniversalCompanies = Boolean(companies && companies.length > 0);
+  const filteredCompanyInvoices = (companyInvoices || []).filter((ci) =>
+    isDateInFilter(ci.date, period, customStart, customEnd)
   );
 
   // Overall totals for Market Receivable and Company Outstanding
@@ -415,18 +612,33 @@ export function calculateAnalytics(
   );
   const marketReceivable = partySummaries.reduce((sum, p) => sum + p.currentBalance, 0);
 
-  // Company balances
-  const totalCompanyLiability = (period === 'all' ? invoices : filteredInvoices).reduce(
-    (sum, i) => sum + (Number(i.amount) || 0),
-    0
-  );
+  // Company balances: if universal companies provided, calculate from them; otherwise fallback to legacy formula
+  const totalCompanyLiability = hasUniversalCompanies
+    ? (period === 'all' ? (companyInvoices || []) : filteredCompanyInvoices).reduce(
+        (sum, ci) => sum + (Number(ci.amount) || 0),
+        0
+      )
+    : (period === 'all' ? invoices : filteredInvoices).reduce(
+        (sum, i) => sum + (Number(i.amount) || 0),
+        0
+      );
+
   const totalCompanyPaid = (period === 'all' ? companyPayments : filteredCompanyPayments).reduce(
     (sum, c) => sum + (Number(c.amount) || 0),
     0
   );
 
-  const companyBalance = calculateCompanyBalance(invoices, companyPayments);
-  const companyOutstanding = companyBalance.outstanding;
+  let companyOutstanding = 0;
+  if (hasUniversalCompanies && companies) {
+    companyOutstanding = companies.reduce(
+      (sum, comp) =>
+        sum + calculateSingleCompanyBalance(comp.id, companyInvoices || [], companyPayments).currentBalance,
+      0
+    );
+  } else {
+    const companyBalance = calculateCompanyBalance(invoices, companyPayments);
+    companyOutstanding = companyBalance.outstanding;
+  }
 
   // Net Outstanding Difference (Market Receivable minus Company Payable)
   // Strictly labeled as Net Outstanding Difference, NOT profit
@@ -455,6 +667,8 @@ export function calculateAnalytics(
     invoicesCount: filteredInvoices.length,
     partyPaymentsCount: filteredPartyPayments.length,
     companyPaymentsCount: filteredCompanyPayments.length,
+    companiesCount: companies?.length,
+    companyInvoicesCount: companyInvoices?.length,
   };
 }
 
@@ -465,7 +679,8 @@ export function getRecentTransactions(
   invoices: PartyInvoice[],
   partyPayments: PartyPayment[],
   companyPayments: CompanyPayment[],
-  limit = 20
+  limit = 20,
+  companyInvoices?: CompanyInvoice[]
 ): RecentTransactionItem[] {
   const items: RecentTransactionItem[] = [];
 
@@ -500,12 +715,27 @@ export function getRecentTransactions(
       id: `cpmt-${cpmt.id}`,
       date: cpmt.date,
       timestamp: cpmt.createdAt || cpmt.date,
-      title: 'Login Smart Technology',
+      title: cpmt.companyName || 'Company',
       subtitle: `Company Paid via ${cpmt.paymentMethod}${cpmt.reference ? ` • Receipt: ${cpmt.reference}` : ''}`,
       amount: cpmt.amount,
       type: 'company_payment',
       direction: 'outgoing',
     });
+  }
+
+  if (companyInvoices) {
+    for (const cinv of companyInvoices) {
+      items.push({
+        id: `cinv-${cinv.id}`,
+        date: cinv.date,
+        timestamp: cinv.createdAt || cinv.date,
+        title: cinv.companyName || 'Company Purchase',
+        subtitle: `Purchase #${cinv.invoiceNumber}${cinv.description ? ` • ${cinv.description}` : ''}`,
+        amount: cinv.amount,
+        type: 'company_invoice',
+        direction: 'liability',
+      });
+    }
   }
 
   // Sort descending by date, then timestamp

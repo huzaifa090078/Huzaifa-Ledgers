@@ -12,7 +12,14 @@ import {
   HardDrive,
   FileCheck,
 } from 'lucide-react';
-import type { Party, PartyInvoice, PartyPayment, CompanyPayment } from '../types';
+import type {
+  Party,
+  PartyInvoice,
+  PartyPayment,
+  CompanyPayment,
+  Company,
+  CompanyInvoice,
+} from '../types';
 import {
   exportBackupFile,
   validateBackupPayload,
@@ -33,6 +40,8 @@ interface SettingsProps {
   invoices: PartyInvoice[];
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
+  companies?: Company[];
+  companyInvoices?: CompanyInvoice[];
   onDataChanged: () => void;
 }
 
@@ -41,6 +50,8 @@ export const Settings: React.FC<SettingsProps> = ({
   invoices,
   partyPayments,
   companyPayments,
+  companies = [],
+  companyInvoices = [],
   onDataChanged,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -425,18 +436,26 @@ export const Settings: React.FC<SettingsProps> = ({
         <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-2">
           Local Storage Database Stats
         </span>
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
           <div className="p-2 bg-slate-50 rounded-lg">
             <span className="text-[10px] text-slate-500 block">Parties</span>
             <span className="text-sm font-bold text-slate-900 font-mono">{parties.length}</span>
           </div>
           <div className="p-2 bg-slate-50 rounded-lg">
-            <span className="text-[10px] text-slate-500 block">Invoices</span>
+            <span className="text-[10px] text-slate-500 block">Party Inv.</span>
             <span className="text-sm font-bold text-slate-900 font-mono">{invoices.length}</span>
           </div>
           <div className="p-2 bg-slate-50 rounded-lg">
             <span className="text-[10px] text-slate-500 block">Party Pmts</span>
             <span className="text-sm font-bold text-slate-900 font-mono">{partyPayments.length}</span>
+          </div>
+          <div className="p-2 bg-slate-50 rounded-lg">
+            <span className="text-[10px] text-slate-500 block">Companies</span>
+            <span className="text-sm font-bold text-slate-900 font-mono">{companies.length}</span>
+          </div>
+          <div className="p-2 bg-slate-50 rounded-lg">
+            <span className="text-[10px] text-slate-500 block">Co. Inv.</span>
+            <span className="text-sm font-bold text-slate-900 font-mono">{companyInvoices.length}</span>
           </div>
           <div className="p-2 bg-slate-50 rounded-lg">
             <span className="text-[10px] text-slate-500 block">Co. Pmts</span>
@@ -575,13 +594,19 @@ export const Settings: React.FC<SettingsProps> = ({
                 • {pendingRestorePayload.parties?.length || 0} Parties
               </div>
               <div className="text-slate-600">
-                • {pendingRestorePayload.invoices?.length || 0} Invoices
+                • {pendingRestorePayload.invoices?.length || 0} Party Invoices
               </div>
               <div className="text-slate-600">
                 • {pendingRestorePayload.partyPayments?.length || 0} Party Payments
               </div>
               <div className="text-slate-600">
-                • {pendingRestorePayload.companyPayments?.length || 0} Company Deposits
+                • {pendingRestorePayload.companies?.length || 0} Companies
+              </div>
+              <div className="text-slate-600">
+                • {pendingRestorePayload.companyInvoices?.length || 0} Company Invoices
+              </div>
+              <div className="text-slate-600">
+                • {pendingRestorePayload.companyPayments?.length || 0} Company Payments
               </div>
             </div>
 

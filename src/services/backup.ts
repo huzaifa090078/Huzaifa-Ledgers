@@ -2,7 +2,16 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { db } from '../db';
-import type { Party, PartyInvoice, PartyPayment, CompanyPayment, AppSettings, DailyReconciliation } from '../types';
+import type {
+  Party,
+  PartyInvoice,
+  PartyPayment,
+  CompanyPayment,
+  Company,
+  CompanyInvoice,
+  AppSettings,
+  DailyReconciliation,
+} from '../types';
 import { getTodayDateString } from './accounting';
 
 export const FOLDER_SMART_TECH = 'Smart Technology';
@@ -23,6 +32,8 @@ export interface BackupDataPayload {
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
   dailyReconciliations: DailyReconciliation[];
+  companies?: Company[];
+  companyInvoices?: CompanyInvoice[];
   settings?: any;
   data: {
     parties: Party[];
@@ -30,6 +41,8 @@ export interface BackupDataPayload {
     partyPayments: PartyPayment[];
     companyPayments: CompanyPayment[];
     dailyReconciliations: DailyReconciliation[];
+    companies?: Company[];
+    companyInvoices?: CompanyInvoice[];
     settings?: any;
   };
 }
@@ -69,13 +82,24 @@ export async function ensureStorageFolders(): Promise<boolean> {
  * Generates the complete, standardized, versioned backup payload from Dexie IndexedDB
  */
 export async function generateBackupPayload(): Promise<BackupDataPayload> {
-  const [parties, invoices, partyPayments, companyPayments, settingsList, dailyReconciliations] = await Promise.all([
+  const [
+    parties,
+    invoices,
+    partyPayments,
+    companyPayments,
+    settingsList,
+    dailyReconciliations,
+    companies,
+    companyInvoices,
+  ] = await Promise.all([
     db.parties.toArray(),
     db.invoices.toArray(),
     db.partyPayments.toArray(),
     db.companyPayments.toArray(),
     db.settings.toArray(),
     db.dailyReconciliations.toArray(),
+    db.companies.toArray(),
+    db.companyInvoices.toArray(),
   ]);
 
   const timestamp = new Date().toISOString();
@@ -84,7 +108,7 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
   const payload: BackupDataPayload = {
     backupFormatVersion: 1,
     appVersion: '1.2',
-    databaseVersion: 2,
+    databaseVersion: 3,
     createdAt: timestamp,
     updatedAt: timestamp,
     appName: 'Login Smart Technology Business Ledger',
@@ -93,6 +117,8 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
     partyPayments,
     companyPayments,
     dailyReconciliations,
+    companies,
+    companyInvoices,
     settings: settingsList,
     data: {
       parties,
@@ -100,6 +126,8 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
       partyPayments,
       companyPayments,
       dailyReconciliations,
+      companies,
+      companyInvoices,
       settings: settingsObj,
     },
   };
@@ -304,6 +332,18 @@ export function validateBackupPayload(data: any): { valid: boolean; normalized?:
     return { valid: false, error: 'Backup is missing required "companyPayments" table.' };
   }
 
+  const companies = Array.isArray(data.companies)
+    ? data.companies
+    : Array.isArray(data.data?.companies)
+    ? data.data.companies
+    : [];
+
+  const companyInvoices = Array.isArray(data.companyInvoices)
+    ? data.companyInvoices
+    : Array.isArray(data.data?.companyInvoices)
+    ? data.data.companyInvoices
+    : [];
+
   // Normalize settings to AppSettings[]
   let settingsList: AppSettings[] = [];
   if (Array.isArray(rawSettings)) {
@@ -315,7 +355,7 @@ export function validateBackupPayload(data: any): { valid: boolean; normalized?:
   const normalized: BackupDataPayload = {
     backupFormatVersion: data.backupFormatVersion || data.version || 1,
     appVersion: data.appVersion || '1.2',
-    databaseVersion: data.databaseVersion || 2,
+    databaseVersion: data.databaseVersion || 3,
     createdAt: data.createdAt || data.updatedAt || new Date().toISOString(),
     updatedAt: data.updatedAt || data.exportedAt || new Date().toISOString(),
     appName: data.appName || 'Login Smart Technology Business Ledger',
@@ -324,6 +364,8 @@ export function validateBackupPayload(data: any): { valid: boolean; normalized?:
     partyPayments,
     companyPayments,
     dailyReconciliations,
+    companies,
+    companyInvoices,
     settings: settingsList,
     data: {
       parties,
@@ -331,6 +373,8 @@ export function validateBackupPayload(data: any): { valid: boolean; normalized?:
       partyPayments,
       companyPayments,
       dailyReconciliations,
+      companies,
+      companyInvoices,
       settings: settingsList.length > 0 ? settingsList[0] : rawSettings,
     },
   };
@@ -350,6 +394,8 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
   invoicesCount?: number;
   partyPaymentsCount?: number;
   companyPaymentsCount?: number;
+  companiesCount?: number;
+  companyInvoicesCount?: number;
 }> {
   // Step 1: Validate payload format before touching anything
   const validation = validateBackupPayload(rawPayload);
@@ -363,11 +409,19 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
   const payload = validation.normalized;
 
   // Step 2: Check for accidentally empty backup wiping non-empty database
-  const incomingTotal = payload.parties.length + payload.invoices.length + payload.partyPayments.length;
+  const incomingTotal =
+    payload.parties.length +
+    payload.invoices.length +
+    payload.partyPayments.length +
+    (payload.companies?.length || 0) +
+    (payload.companyInvoices?.length || 0);
+
   const currentTotal =
     (await db.parties.count()) +
     (await db.invoices.count()) +
-    (await db.partyPayments.count());
+    (await db.partyPayments.count()) +
+    (await db.companies.count()) +
+    (await db.companyInvoices.count());
 
   if (incomingTotal === 0 && currentTotal > 0) {
     return {
@@ -383,6 +437,8 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
     partyPayments: PartyPayment[];
     companyPayments: CompanyPayment[];
     dailyReconciliations: DailyReconciliation[];
+    companies: Company[];
+    companyInvoices: CompanyInvoice[];
     settings: AppSettings[];
   };
 
@@ -393,6 +449,8 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
       partyPayments: await db.partyPayments.toArray(),
       companyPayments: await db.companyPayments.toArray(),
       dailyReconciliations: await db.dailyReconciliations.toArray(),
+      companies: await db.companies.toArray(),
+      companyInvoices: await db.companyInvoices.toArray(),
       settings: await db.settings.toArray(),
     };
   } catch (err: any) {
@@ -406,7 +464,16 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
   try {
     await db.transaction(
       'rw',
-      [db.parties, db.invoices, db.partyPayments, db.companyPayments, db.settings, db.dailyReconciliations],
+      [
+        db.parties,
+        db.invoices,
+        db.partyPayments,
+        db.companyPayments,
+        db.settings,
+        db.dailyReconciliations,
+        db.companies,
+        db.companyInvoices,
+      ],
       async () => {
         // Clear tables
         await db.parties.clear();
@@ -414,6 +481,8 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
         await db.partyPayments.clear();
         await db.companyPayments.clear();
         await db.dailyReconciliations.clear();
+        await db.companies.clear();
+        await db.companyInvoices.clear();
 
         // Restore verified records
         if (payload.parties.length > 0) {
@@ -435,6 +504,12 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
         if (payload.dailyReconciliations.length > 0) {
           await db.dailyReconciliations.bulkAdd(payload.dailyReconciliations);
         }
+        if (payload.companies && payload.companies.length > 0) {
+          await db.companies.bulkAdd(payload.companies);
+        }
+        if (payload.companyInvoices && payload.companyInvoices.length > 0) {
+          await db.companyInvoices.bulkAdd(payload.companyInvoices);
+        }
       }
     );
 
@@ -443,11 +518,13 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
 
     return {
       success: true,
-      message: `Restored ${payload.parties.length} parties, ${payload.invoices.length} invoices, and ${payload.partyPayments.length} payments successfully.`,
+      message: `Restored ${payload.parties.length} parties, ${payload.invoices.length} invoices, and ${payload.companies?.length || 0} companies successfully.`,
       partiesCount: payload.parties.length,
       invoicesCount: payload.invoices.length,
       partyPaymentsCount: payload.partyPayments.length,
       companyPaymentsCount: payload.companyPayments.length,
+      companiesCount: payload.companies?.length || 0,
+      companyInvoicesCount: payload.companyInvoices?.length || 0,
     };
   } catch (restoreErr: any) {
     console.error('Restore failed, initiating rollback from safety snapshot:', restoreErr);
@@ -456,7 +533,16 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
     try {
       await db.transaction(
         'rw',
-        [db.parties, db.invoices, db.partyPayments, db.companyPayments, db.settings, db.dailyReconciliations],
+        [
+          db.parties,
+          db.invoices,
+          db.partyPayments,
+          db.companyPayments,
+          db.settings,
+          db.dailyReconciliations,
+          db.companies,
+          db.companyInvoices,
+        ],
         async () => {
           await db.parties.clear();
           if (safetySnapshot.parties.length > 0) await db.parties.bulkAdd(safetySnapshot.parties);
@@ -472,6 +558,12 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
 
           await db.dailyReconciliations.clear();
           if (safetySnapshot.dailyReconciliations.length > 0) await db.dailyReconciliations.bulkAdd(safetySnapshot.dailyReconciliations);
+
+          await db.companies.clear();
+          if (safetySnapshot.companies.length > 0) await db.companies.bulkAdd(safetySnapshot.companies);
+
+          await db.companyInvoices.clear();
+          if (safetySnapshot.companyInvoices.length > 0) await db.companyInvoices.bulkAdd(safetySnapshot.companyInvoices);
 
           if (safetySnapshot.settings.length > 0) {
             await db.settings.clear();

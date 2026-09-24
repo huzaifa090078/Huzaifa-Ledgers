@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { Party, PartyInvoice, PartyPayment, CompanyPayment } from '../src/types';
+import type { Party, PartyInvoice, PartyPayment, CompanyPayment, Company, CompanyInvoice } from '../src/types';
 import {
   calculatePartyBalance,
   calculateCompanyBalance,
+  calculateSingleCompanyBalance,
+  getCompanyLedgerTimeline,
+  calculateCompanyPeriodLedger,
   calculateAnalytics,
   formatPKR,
   getPartyLedgerTimeline,
@@ -726,6 +729,347 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(formatLocalTime('2026-09-24T11:10:00.000Z')).toBe('04:10 PM');
       expect(formatLocalTime('2026-09-24T05:00:00.000Z')).toBe('10:00 AM');
       expect(formatLocalTime('')).toBe('');
+    });
+  });
+
+  describe('Universal Company Ledger System Tests', () => {
+    const comp1: Company = {
+      id: 'comp-1',
+      name: 'Login Smart Technology',
+      phone: '03001234567',
+      address: 'Lahore, Pakistan',
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    };
+
+    const comp2: Company = {
+      id: 'comp-2',
+      name: 'ABC Traders',
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    };
+
+    it('calculates single company balance correctly for normal, advance, and zero balances', () => {
+      const invoices: CompanyInvoice[] = [
+        {
+          id: 'ci-1',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-001',
+          date: '2026-09-10',
+          amount: 100000,
+          createdAt: '2026-09-10T10:00:00Z',
+          updatedAt: '2026-09-10T10:00:00Z',
+        },
+      ];
+      const payments: CompanyPayment[] = [
+        {
+          id: 'cp-1',
+          companyId: comp1.id,
+          date: '2026-09-12',
+          amount: 30000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-12T10:00:00Z',
+          updatedAt: '2026-09-12T10:00:00Z',
+        },
+      ];
+
+      // Normal balance: 100,000 - 30,000 = 70,000 outstanding
+      const bal1 = calculateSingleCompanyBalance(comp1.id, invoices, payments);
+      expect(bal1.totalInvoices).toBe(100000);
+      expect(bal1.totalPayments).toBe(30000);
+      expect(bal1.currentBalance).toBe(70000);
+      expect(bal1.isAdvance).toBe(false);
+      expect(bal1.advanceAmount).toBe(0);
+
+      // Advance balance: Add payment of 80,000 (total paid = 110,000 > 100,000)
+      payments.push({
+        id: 'cp-2',
+        companyId: comp1.id,
+        date: '2026-09-15',
+        amount: 80000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-15T10:00:00Z',
+        updatedAt: '2026-09-15T10:00:00Z',
+      });
+      const balAdvance = calculateSingleCompanyBalance(comp1.id, invoices, payments);
+      expect(balAdvance.currentBalance).toBe(0);
+      expect(balAdvance.isAdvance).toBe(true);
+      expect(balAdvance.advanceAmount).toBe(10000);
+
+      // Zero balance for comp2 (no transactions)
+      const balComp2 = calculateSingleCompanyBalance(comp2.id, invoices, payments);
+      expect(balComp2.currentBalance).toBe(0);
+      expect(balComp2.totalInvoices).toBe(0);
+      expect(balComp2.totalPayments).toBe(0);
+      expect(balComp2.isAdvance).toBe(false);
+    });
+
+    it('generates chronological company ledger timeline with running balance', () => {
+      const invoices: CompanyInvoice[] = [
+        {
+          id: 'ci-1',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-101',
+          date: '2026-09-01',
+          amount: 50000,
+          createdAt: '2026-09-01T09:00:00Z',
+          updatedAt: '2026-09-01T09:00:00Z',
+        },
+        {
+          id: 'ci-2',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-102',
+          date: '2026-09-10',
+          amount: 25000,
+          createdAt: '2026-09-10T09:00:00Z',
+          updatedAt: '2026-09-10T09:00:00Z',
+        },
+      ];
+      const payments: CompanyPayment[] = [
+        {
+          id: 'cp-1',
+          companyId: comp1.id,
+          date: '2026-09-05',
+          amount: 20000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-05T10:00:00Z',
+          updatedAt: '2026-09-05T10:00:00Z',
+        },
+      ];
+
+      const timeline = getCompanyLedgerTimeline(comp1.id, invoices, payments);
+      expect(timeline.entries).toHaveLength(3);
+
+      // 1. Purchase on 2026-09-01: Debit 50,000, Balance 50,000
+      expect(timeline.entries[0].type).toBe('invoice');
+      expect(timeline.entries[0].debit).toBe(50000);
+      expect(timeline.entries[0].balance).toBe(50000);
+
+      // 2. Payment on 2026-09-05: Credit 20,000, Balance 30,000
+      expect(timeline.entries[1].type).toBe('payment');
+      expect(timeline.entries[1].credit).toBe(20000);
+      expect(timeline.entries[1].balance).toBe(30000);
+
+      // 3. Purchase on 2026-09-10: Debit 25,000, Balance 55,000
+      expect(timeline.entries[2].type).toBe('invoice');
+      expect(timeline.entries[2].debit).toBe(25000);
+      expect(timeline.entries[2].balance).toBe(55000);
+
+      expect(timeline.finalBalance).toBe(55000);
+    });
+
+    it('calculates company period ledger with accurate opening and closing balances', () => {
+      const invoices: CompanyInvoice[] = [
+        {
+          id: 'ci-prior',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-PRIOR',
+          date: '2026-08-15',
+          amount: 40000,
+          createdAt: '2026-08-15T09:00:00Z',
+          updatedAt: '2026-08-15T09:00:00Z',
+        },
+        {
+          id: 'ci-current',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-CURR',
+          date: '2026-09-05',
+          amount: 30000,
+          createdAt: '2026-09-05T09:00:00Z',
+          updatedAt: '2026-09-05T09:00:00Z',
+        },
+      ];
+      const payments: CompanyPayment[] = [
+        {
+          id: 'cp-prior',
+          companyId: comp1.id,
+          date: '2026-08-20',
+          amount: 15000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-08-20T10:00:00Z',
+          updatedAt: '2026-08-20T10:00:00Z',
+        },
+        {
+          id: 'cp-current',
+          companyId: comp1.id,
+          date: '2026-09-08',
+          amount: 10000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-08T10:00:00Z',
+          updatedAt: '2026-09-08T10:00:00Z',
+        },
+      ];
+
+      // Period: 2026-09-01 to 2026-09-30
+      // Prior balance: 40,000 - 15,000 = 25,000 opening
+      // Period purchases: 30,000
+      // Period payments: 10,000
+      // Closing balance: 25,000 + 30,000 - 10,000 = 45,000
+      const periodLedger = calculateCompanyPeriodLedger(comp1.id, invoices, payments, '2026-09-01', '2026-09-30');
+      expect(periodLedger.openingBalance).toBe(25000);
+      expect(periodLedger.periodInvoicesTotal).toBe(30000);
+      expect(periodLedger.periodPaymentsTotal).toBe(10000);
+      expect(periodLedger.closingBalance).toBe(45000);
+      expect(periodLedger.entries).toHaveLength(2);
+    });
+
+    it('builds concise, plain-text WhatsApp share message for company ledger', async () => {
+      const { buildCompanyLedgerSummaryText } = await import('../src/services/share');
+      const invoices: CompanyInvoice[] = [
+        {
+          id: 'ci-1',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-786',
+          date: '2026-09-10',
+          amount: 70000,
+          createdAt: '2026-09-10T10:00:00Z',
+          updatedAt: '2026-09-10T10:00:00Z',
+        },
+      ];
+      const payments: CompanyPayment[] = [
+        {
+          id: 'cp-1',
+          companyId: comp1.id,
+          date: '2026-09-15',
+          amount: 25000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-15T10:00:00Z',
+          updatedAt: '2026-09-15T10:00:00Z',
+        },
+      ];
+
+      const text = buildCompanyLedgerSummaryText(comp1, invoices, payments);
+      expect(text).toContain('Company: Login Smart Technology');
+      expect(text).toContain('Last Balance: Rs 70,000');
+      expect(text).toContain('Recent Payment: Rs 25,000');
+      expect(text).toContain('Pending Balance: Rs 45,000');
+      expect(text).not.toContain('Opening Balance:');
+    });
+
+    it('calculates universal company analytics dynamically across multiple companies', () => {
+      const parties: Party[] = [
+        { id: 'p1', name: 'Party 1', createdAt: '', updatedAt: '' },
+      ];
+      const partyInvoices: PartyInvoice[] = [
+        { id: 'pi-1', invoiceNumber: '1', partyId: 'p1', partyName: 'Party 1', date: '2026-09-01', amount: 80000, createdAt: '', updatedAt: '' },
+      ];
+      const partyPayments: PartyPayment[] = [
+        { id: 'pp-1', partyId: 'p1', partyName: 'Party 1', date: '2026-09-02', amount: 20000, paymentMethod: 'Cash', createdAt: '', updatedAt: '' },
+      ];
+
+      const companiesList: Company[] = [comp1, comp2];
+      const companyInvoicesList: CompanyInvoice[] = [
+        { id: 'ci-1', companyId: comp1.id, invoiceNumber: 'A1', date: '2026-09-01', amount: 50000, createdAt: '', updatedAt: '' },
+        { id: 'ci-2', companyId: comp2.id, invoiceNumber: 'B1', date: '2026-09-01', amount: 30000, createdAt: '', updatedAt: '' },
+      ];
+      const companyPaymentsList: CompanyPayment[] = [
+        { id: 'cp-1', companyId: comp1.id, date: '2026-09-03', amount: 20000, paymentMethod: 'Bank', createdAt: '', updatedAt: '' },
+        { id: 'cp-2', companyId: comp2.id, date: '2026-09-03', amount: 10000, paymentMethod: 'Cash', createdAt: '', updatedAt: '' },
+      ];
+
+      // Market receivable: 80,000 - 20,000 = 60,000
+      // Comp1 payable: 50,000 - 20,000 = 30,000
+      // Comp2 payable: 30,000 - 10,000 = 20,000
+      // Total company payable: 30,000 + 20,000 = 50,000
+      // Net difference: 60,000 - 50,000 = 10,000
+      const analytics = calculateAnalytics(
+        parties,
+        partyInvoices,
+        partyPayments,
+        companyPaymentsList,
+        'all',
+        undefined,
+        undefined,
+        companiesList,
+        companyInvoicesList
+      );
+
+      expect(analytics.marketReceivable).toBe(60000);
+      expect(analytics.companyOutstanding).toBe(50000);
+      expect(analytics.netOutstandingDifference).toBe(10000);
+    });
+
+    it('generates company ledger PDF containing Company Name, Opening and Closing balances', async () => {
+      const { generateCompanyLedgerPDF } = await import('../src/services/pdf');
+      const invoices: CompanyInvoice[] = [
+        {
+          id: 'ci-1',
+          companyId: comp1.id,
+          invoiceNumber: 'INV-100',
+          date: '2026-09-12',
+          amount: 50000,
+          createdAt: '2026-09-12T10:00:00Z',
+          updatedAt: '2026-09-12T10:00:00Z',
+        },
+      ];
+      const payments: CompanyPayment[] = [
+        {
+          id: 'cp-1',
+          companyId: comp1.id,
+          date: '2026-09-14',
+          amount: 15000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-14T10:00:00Z',
+          updatedAt: '2026-09-14T10:00:00Z',
+        },
+      ];
+
+      const result = await generateCompanyLedgerPDF(
+        comp1,
+        invoices,
+        payments,
+        'Business Ledger',
+        '2026-09-10',
+        '2026-09-15'
+      );
+
+      expect(result.filename).toBe('CompanyLedger_Login_Smart_Technology_2026-09-10_to_2026-09-15.pdf');
+      expect(result.pdfBlob.size).toBeGreaterThan(1000);
+
+      const pdfText = await result.pdfBlob.text();
+      expect(pdfText).toContain('Opening Balance');
+      expect(pdfText).toContain('Closing Balance');
+      expect(pdfText).toContain('Login Smart Technology');
+      expect(pdfText).toContain('10/09/2026 to 15/09/2026');
+    });
+
+    it('validates backup payload with companies and companyInvoices and provides backward compatibility for older backups', async () => {
+      const { validateBackupPayload } = await import('../src/services/backup');
+
+      // Valid new payload
+      const modernPayload = {
+        version: 3,
+        appVersion: '1.2',
+        exportedAt: '2026-09-24T12:00:00.000Z',
+        parties: [],
+        invoices: [],
+        partyPayments: [],
+        companyPayments: [],
+        companies: [{ id: 'comp-1', name: 'Login Smart Technology', createdAt: '', updatedAt: '' }],
+        companyInvoices: [{ id: 'ci-1', companyId: 'comp-1', invoiceNumber: '1', date: '2026-09-24', amount: 1000, createdAt: '', updatedAt: '' }],
+        dailyReconciliations: [],
+      };
+      const validModern = validateBackupPayload(modernPayload);
+      expect(validModern.valid).toBe(true);
+      expect(validModern.normalized?.companies).toHaveLength(1);
+      expect(validModern.normalized?.companyInvoices).toHaveLength(1);
+
+      // Older version 2 backup without companies and companyInvoices
+      const legacyPayload = {
+        version: 2,
+        appVersion: '1.1',
+        exportedAt: '2026-09-23T12:00:00.000Z',
+        parties: [],
+        invoices: [],
+        partyPayments: [],
+        companyPayments: [],
+        dailyReconciliations: [],
+      };
+      const validLegacy = validateBackupPayload(legacyPayload);
+      expect(validLegacy.valid).toBe(true);
+      // Automatically defaults missing tables to empty arrays so old backups restore seamlessly
+      expect(validLegacy.normalized?.companies).toEqual([]);
+      expect(validLegacy.normalized?.companyInvoices).toEqual([]);
     });
   });
 });

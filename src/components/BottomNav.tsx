@@ -40,7 +40,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'company' as NavTab,
-      label: 'Company',
+      label: 'Companies',
       icon: Building2,
     },
     {

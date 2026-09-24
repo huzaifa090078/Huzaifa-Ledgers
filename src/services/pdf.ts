@@ -7,10 +7,14 @@ import type {
   Party,
   PartyInvoice,
   PartyPayment,
+  Company,
+  CompanyInvoice,
+  CompanyPayment,
   DailyCollectionSummary,
 } from '../types';
 import {
   calculatePartyPeriodLedger,
+  calculateCompanyPeriodLedger,
   formatPKR,
   formatDateDisplay,
   getTodayDateString,
@@ -493,6 +497,289 @@ export async function downloadPartyLedgerPDF(
   endDate?: string
 ): Promise<SavePDFResult> {
   return await exportPartyLedgerPDF(party, invoices, payments, 'mobile', salesmanName, startDate, endDate);
+}
+
+/**
+ * Generates an offline professional PDF ledger statement for a Company / Supplier
+ */
+export function generateCompanyLedgerPDF(
+  company: Company,
+  invoices: CompanyInvoice[],
+  payments: CompanyPayment[],
+  salesmanName = 'Business Ledger',
+  startDate?: string,
+  endDate?: string
+): PDFExportResult {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const periodLedger = calculateCompanyPeriodLedger(company.id, invoices, payments, startDate, endDate);
+  const isDateRange = periodLedger.isDateRange;
+  const filteredEntries = periodLedger.entries;
+
+  const formatPeriodDate = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    return formatDateDisplay(dateStr).replace(/-/g, '/');
+  };
+
+  const effectiveStartDate =
+    startDate ||
+    (filteredEntries.length > 0
+      ? filteredEntries[0].date
+      : company.createdAt
+      ? company.createdAt.split('T')[0]
+      : getTodayDateString());
+
+  const effectiveEndDate =
+    endDate ||
+    (filteredEntries.length > 0
+      ? filteredEntries[filteredEntries.length - 1].date
+      : getTodayDateString());
+
+  const periodText = `${formatPeriodDate(effectiveStartDate)} to ${formatPeriodDate(effectiveEndDate)}`;
+
+  const primaryColor = [15, 23, 42]; // slate-900
+  const secondaryColor = [79, 70, 229]; // indigo-600
+  const lightBg = [248, 250, 252]; // slate-50
+
+  // 1. Header Banner
+  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.rect(0, 0, 210, 26, 'F');
+  doc.setFillColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+  doc.rect(0, 25, 210, 1.5, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LOGIN SMART TECHNOLOGY', 14, 12);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('COMPANY / SUPPLIER LEDGER STATEMENT', 14, 19);
+
+  doc.setFontSize(9);
+  doc.text(`Account: ${salesmanName}`, 196, 12, { align: 'right' });
+  doc.text(`Generated: ${formatDateDisplay(getTodayDateString())}`, 196, 19, { align: 'right' });
+
+  // 2. Company & Statement Info Card
+  doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+  doc.roundedRect(14, 32, 182, 28, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, 32, 182, 28, 2, 2, 'S');
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(company.name, 18, 41);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Phone: ${company.phone || 'N/A'}`, 18, 47);
+  if (company.address) {
+    doc.text(`Address: ${company.address}`, 18, 53);
+  }
+
+  // Center: Statement Period
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('Statement Period:', 105, 41, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text(periodText, 105, 48, { align: 'center' });
+
+  // 3. Outstanding / Closing Balance Box
+  const isAdvance = periodLedger.isClosingAdvance;
+  const balanceLabel = isAdvance
+    ? 'Advance'
+    : (isDateRange ? 'Closing Balance' : 'Remaining Amount');
+  const balanceValue = isAdvance
+    ? formatPKR(Math.abs(periodLedger.closingBalance))
+    : formatPKR(periodLedger.closingBalance);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(balanceLabel, 192, 41, { align: 'right' });
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  if (isAdvance) {
+    doc.setTextColor(16, 185, 129); // Green
+  } else {
+    doc.setTextColor(220, 38, 38); // Red
+  }
+  doc.text(balanceValue, 192, 49, { align: 'right' });
+
+  // 4. Detailed Transactions Table
+  const tableRows: any[] = [];
+
+  if (isDateRange && startDate) {
+    const openingLabel = `Opening Balance (Prior to ${formatDateDisplay(startDate)})`;
+    const openVal = periodLedger.isOpeningAdvance
+      ? `(Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))})`
+      : formatPKR(periodLedger.openingBalance);
+
+    tableRows.push([
+      formatDateDisplay(startDate),
+      openingLabel,
+      '-',
+      '-',
+      openVal,
+    ]);
+  }
+
+  for (const row of filteredEntries) {
+    tableRows.push([
+      formatDateDisplay(row.date),
+      row.description,
+      row.debit > 0 ? formatPKR(row.debit) : '-',
+      row.credit > 0 ? formatPKR(row.credit) : '-',
+      row.balance < 0 ? `(Adv: ${formatPKR(Math.abs(row.balance))})` : formatPKR(row.balance),
+    ]);
+  }
+
+  if (tableRows.length === 0) {
+    tableRows.push(['-', 'No transactions recorded', '-', '-', formatPKR(0)]);
+  }
+
+  autoTable(doc, {
+    startY: 66,
+    head: [['Date', 'Description / Reference', 'Purchases / Bills (+)', 'Payments Made (-)', 'Remaining Amount']],
+    body: tableRows,
+    theme: 'grid',
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 3,
+      textColor: [15, 23, 42],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      halign: 'left',
+    },
+    columnStyles: {
+      0: { cellWidth: 26, halign: 'center' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: 30, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right' },
+      4: { cellWidth: 34, halign: 'right', fontStyle: 'bold' },
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    margin: { left: 14, right: 14 },
+    didDrawPage: (data) => {
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `Page ${data.pageNumber} • Login Smart Technology Business Ledger`,
+        105,
+        290,
+        { align: 'center' }
+      );
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY + 8;
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  let summaryY = finalY;
+  if (finalY + 35 > pageHeight) {
+    doc.addPage();
+    summaryY = 20;
+  }
+
+  // 5. Summary Footer Box
+  doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+  doc.roundedRect(14, summaryY, 182, 26, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, summaryY, 182, 26, 2, 2, 'S');
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+
+  if (startDate) {
+    doc.text('Opening Balance:', 18, summaryY + 8);
+    doc.text('Purchases (Period):', 62, summaryY + 8);
+    doc.text('Payments (Period):', 110, summaryY + 8);
+    doc.text('Closing Balance:', 156, summaryY + 8);
+
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+
+    const openBalStr = periodLedger.isOpeningAdvance
+      ? `Adv: ${formatPKR(Math.abs(periodLedger.openingBalance))}`
+      : formatPKR(periodLedger.openingBalance);
+    doc.text(openBalStr, 18, summaryY + 18);
+
+    doc.text(formatPKR(periodLedger.periodInvoicesTotal), 62, summaryY + 18);
+    doc.text(formatPKR(periodLedger.periodPaymentsTotal), 110, summaryY + 18);
+
+    if (periodLedger.isClosingAdvance) {
+      doc.setTextColor(16, 185, 129);
+      doc.text(`Adv: ${formatPKR(Math.abs(periodLedger.closingBalance))}`, 156, summaryY + 18);
+    } else {
+      doc.setTextColor(220, 38, 38);
+      doc.text(formatPKR(periodLedger.closingBalance), 156, summaryY + 18);
+    }
+  } else {
+    doc.text('Total Purchases (Amount Added):', 20, summaryY + 8);
+    doc.text('Total Payments Made:', 80, summaryY + 8);
+    doc.text('Remaining Amount:', 140, summaryY + 8);
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatPKR(periodLedger.periodInvoicesTotal), 20, summaryY + 18);
+    doc.text(formatPKR(periodLedger.periodPaymentsTotal), 80, summaryY + 18);
+
+    if (periodLedger.isClosingAdvance) {
+      doc.setTextColor(16, 185, 129);
+      doc.text(`Adv: ${formatPKR(Math.abs(periodLedger.closingBalance))}`, 140, summaryY + 18);
+    } else {
+      doc.setTextColor(220, 38, 38);
+      doc.text(formatPKR(periodLedger.closingBalance), 140, summaryY + 18);
+    }
+  }
+
+  const safeCompanyName = company.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = startDate && endDate
+    ? `CompanyLedger_${safeCompanyName}_${startDate}_to_${endDate}.pdf`
+    : `CompanyLedger_${safeCompanyName}_${getTodayDateString()}.pdf`;
+
+  const pdfBlob = doc.output('blob');
+  return { pdfBlob, filename };
+}
+
+/**
+ * Exports Company Ledger PDF with destination: 'mobile' (Save to Mobile) or 'whatsapp' (Send on WhatsApp)
+ */
+export async function exportCompanyLedgerPDF(
+  company: Company,
+  invoices: CompanyInvoice[],
+  payments: CompanyPayment[],
+  destination: 'mobile' | 'whatsapp',
+  salesmanName?: string,
+  startDate?: string,
+  endDate?: string
+): Promise<SavePDFResult> {
+  const { pdfBlob, filename } = generateCompanyLedgerPDF(company, invoices, payments, salesmanName, startDate, endDate);
+  if (destination === 'whatsapp') {
+    return await sharePDFOnWhatsApp(pdfBlob, filename, company.phone);
+  }
+  return await savePDFToMobile(pdfBlob, filename);
 }
 
 /**

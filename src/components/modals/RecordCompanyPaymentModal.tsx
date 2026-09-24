@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Building2, Calendar, CreditCard, Info, Receipt } from 'lucide-react';
-import type { CompanyPayment, CompanyPaymentMethod } from '../../types';
+import type { Company, CompanyPayment, CompanyPaymentMethod } from '../../types';
 import { generateId } from '../../db';
 import { getTodayDateString, formatPKR } from '../../services/accounting';
 
@@ -8,17 +8,22 @@ interface RecordCompanyPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (payment: CompanyPayment) => Promise<void>;
+  companies?: Company[];
+  defaultCompanyId?: string;
   editingPayment?: CompanyPayment | null;
 }
 
-const PAYMENT_METHODS: CompanyPaymentMethod[] = ['Cash', 'Bank', 'Other'];
+const PAYMENT_METHODS: CompanyPaymentMethod[] = ['Cash', 'Bank', 'Easypaisa', 'JazzCash', 'Other'];
 
 export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  companies = [],
+  defaultCompanyId,
   editingPayment,
 }) => {
+  const [companyId, setCompanyId] = useState(defaultCompanyId || '');
   const [date, setDate] = useState(getTodayDateString());
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<CompanyPaymentMethod>('Bank');
@@ -29,12 +34,14 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
 
   useEffect(() => {
     if (editingPayment) {
+      setCompanyId(editingPayment.companyId || defaultCompanyId || '');
       setDate(editingPayment.date);
       setAmount(String(editingPayment.amount));
       setPaymentMethod(editingPayment.paymentMethod);
       setReference(editingPayment.reference || '');
       setNote(editingPayment.note || '');
     } else {
+      setCompanyId(defaultCompanyId || (companies.length > 0 ? companies[0].id : ''));
       setDate(getTodayDateString());
       setAmount('');
       setPaymentMethod('Bank');
@@ -42,16 +49,35 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
       setNote('');
     }
     setError('');
-  }, [editingPayment, isOpen]);
+  }, [editingPayment, defaultCompanyId, companies, isOpen]);
+
+  // Listen to Android hardware back button
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleAppBack = (e: Event) => {
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('app:back', handleAppBack);
+    return () => window.removeEventListener('app:back', handleAppBack);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const targetCompany = companies.find((c) => c.id === companyId);
+  const companyName = targetCompany ? targetCompany.name : editingPayment?.companyName || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (companies.length > 0 && !companyId) {
+      setError('Please select a company/supplier.');
+      return;
+    }
+
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0) {
-      setError('Please enter a valid deposit amount greater than zero.');
+      setError('Please enter a valid payment amount greater than zero.');
       return;
     }
 
@@ -60,6 +86,8 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
       const now = new Date().toISOString();
       const paymentData: CompanyPayment = {
         id: editingPayment ? editingPayment.id : generateId(),
+        companyId: companyId || undefined,
+        companyName: companyName || undefined,
         date: date || getTodayDateString(),
         amount: Math.round(numAmount),
         paymentMethod,
@@ -85,7 +113,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
           <div className="flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-indigo-600" />
             <h2 className="text-base font-semibold text-slate-800 m-0">
-              {editingPayment ? 'Edit Company Payment' : 'Pay / Deposit to Login Smart Technology'}
+              {editingPayment ? 'Edit Company Payment' : companyName ? `Pay / Deposit to ${companyName}` : 'Pay Company / Supplier'}
             </h2>
           </div>
           <button
@@ -103,18 +131,46 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
             </div>
           )}
 
-          {/* Explicit rule notice */}
-          <div className="flex items-start p-3 bg-indigo-50/80 border border-indigo-200/80 rounded-lg text-xs text-indigo-950">
+          {/* Company Selection */}
+          {companies.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Company / Supplier <span className="text-red-500">*</span>
+              </label>
+              {defaultCompanyId && targetCompany && !editingPayment ? (
+                <div className="flex items-center space-x-2 p-2 bg-slate-100 rounded-lg border border-slate-200">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-bold text-slate-800">{targetCompany.name}</span>
+                </div>
+              ) : (
+                <select
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select Company...</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Notice */}
+          <div className="flex items-start p-2.5 bg-indigo-50/80 border border-indigo-200/80 rounded-lg text-xs text-indigo-950">
             <Info className="w-4 h-4 text-indigo-600 mr-2 shrink-0 mt-0.5" />
             <span>
-              <strong>Rule:</strong> Depositing money to Login Smart Technology reduces only your <strong>Amount Payable to the company</strong>. It does <strong>NOT</strong> reduce any party's Amount Due.
+              Payment to company reduces only your <strong>Amount Payable to the company</strong>. It does <strong>NOT</strong> reduce customer balances.
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Deposit Date <span className="text-red-500">*</span>
+                Payment Date <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -125,7 +181,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   required
-                  className="w-full pl-8 pr-2 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
                 />
               </div>
             </div>
@@ -141,7 +197,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as CompanyPaymentMethod)}
-                  className="w-full pl-8 pr-2 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 >
                   {PAYMENT_METHODS.map((m) => (
                     <option key={m} value={m}>
@@ -155,7 +211,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Amount Deposited (PKR) <span className="text-red-500">*</span>
+              Amount Paid (PKR) <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-indigo-600 font-bold text-xs">
@@ -167,14 +223,14 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
                 step="1"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 15000"
+                placeholder="0"
                 required
-                className="w-full pl-9 pr-3 py-2.5 text-base font-semibold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-3 py-2 text-sm font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
               />
             </div>
             {Number(amount) > 0 && (
-              <p className="text-[11px] text-indigo-700 mt-1">
-                Amount: <span className="font-semibold">{formatPKR(Number(amount))}</span>
+              <p className="text-[11px] text-indigo-700 mt-1 font-mono font-medium">
+                Entered: {formatPKR(Number(amount))}
               </p>
             )}
           </div>
@@ -191,22 +247,22 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
                 type="text"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="e.g. HBL-Deposit-98213"
-                className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono text-xs"
+                placeholder="e.g. TR-98213 / Bank Slip"
+                className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Note / Company Memo (Optional)
+              Note / Memo (Optional)
             </label>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Cash handed to Company Accounts"
-              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs"
+              placeholder="e.g. Cash paid for stock invoices"
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
@@ -214,16 +270,16 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 px-4 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition active:bg-slate-300"
+              className="flex-1 py-2 px-4 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-xs transition disabled:opacity-50"
+              className="flex-1 py-2 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-xs transition disabled:opacity-50"
             >
-              {loading ? 'Recording...' : editingPayment ? 'Save Payment' : 'Record Deposit'}
+              {loading ? 'Recording...' : editingPayment ? 'Save Payment' : 'Record Payment'}
             </button>
           </div>
         </form>

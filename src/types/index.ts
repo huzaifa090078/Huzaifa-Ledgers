@@ -34,10 +34,33 @@ export interface PartyPayment {
   updatedAt: string;
 }
 
-export type CompanyPaymentMethod = 'Cash' | 'Bank' | 'Other';
+export type CompanyPaymentMethod = 'Cash' | 'Bank' | 'Easypaisa' | 'JazzCash' | 'Other';
+
+export interface Company {
+  id: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyInvoice {
+  id: string;
+  invoiceNumber: string;
+  companyId: string;
+  companyName: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface CompanyPayment {
   id: string;
+  companyId?: string;
+  companyName?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   paymentMethod: CompanyPaymentMethod;
@@ -88,6 +111,45 @@ export interface CompanyBalanceSummary {
   advanceAmount: number;
 }
 
+export interface IndividualCompanyBalanceSummary {
+  companyId: string;
+  companyName: string;
+  phone?: string;
+  address?: string;
+  totalInvoices: number;
+  totalPayments: number;
+  currentBalance: number;
+  isAdvance: boolean;
+  advanceAmount: number;
+  lastActivityDate?: string;
+}
+
+export interface CompanyLedgerEntry {
+  id: string;
+  date: string;
+  type: 'invoice' | 'payment';
+  description: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  paymentMethod?: CompanyPaymentMethod;
+  invoiceNumber?: string;
+  rawItem: CompanyInvoice | CompanyPayment;
+}
+
+export interface CompanyPeriodLedger {
+  startDate?: string;
+  endDate?: string;
+  isDateRange: boolean;
+  openingBalance: number;
+  isOpeningAdvance: boolean;
+  periodInvoicesTotal: number;
+  periodPaymentsTotal: number;
+  closingBalance: number;
+  isClosingAdvance: boolean;
+  entries: CompanyLedgerEntry[];
+}
+
 export interface AnalyticsSummary {
   marketReceivable: number;
   marketInvoiced: number;
@@ -102,9 +164,11 @@ export interface AnalyticsSummary {
   invoicesCount: number;
   partyPaymentsCount: number;
   companyPaymentsCount: number;
+  companiesCount?: number;
+  companyInvoicesCount?: number;
 }
 
-export type TransactionType = 'invoice' | 'party_payment' | 'company_payment';
+export type TransactionType = 'invoice' | 'party_payment' | 'company_payment' | 'company_invoice';
 
 export interface RecentTransactionItem {
   id: string;

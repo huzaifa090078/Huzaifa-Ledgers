@@ -11,7 +11,7 @@ import {
   ArrowRight,
   Wallet,
 } from 'lucide-react';
-import type { Party, PartyInvoice, PartyPayment, CompanyPayment, DailyReconciliation } from '../types';
+import type { Party, PartyInvoice, PartyPayment, CompanyPayment, Company, CompanyInvoice, DailyReconciliation } from '../types';
 import {
   calculateAnalytics,
   calculateDailyCollection,
@@ -27,6 +27,8 @@ interface DashboardProps {
   invoices: PartyInvoice[];
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
+  companies?: Company[];
+  companyInvoices?: CompanyInvoice[];
   dailyReconciliations?: DailyReconciliation[];
   onOpenAddParty: () => void;
   onOpenAddInvoice?: () => void;
@@ -42,6 +44,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   invoices,
   partyPayments,
   companyPayments,
+  companies = [],
+  companyInvoices = [],
   dailyReconciliations = [],
   onOpenAddParty,
   onSelectParty,
@@ -49,8 +53,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateToCollection,
 }) => {
   const todayStr = getTodayDateString();
-  const analytics = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all');
-  const recentTransactions = getRecentTransactions(invoices, partyPayments, companyPayments, 15);
+  const analytics = calculateAnalytics(
+    parties,
+    invoices,
+    partyPayments,
+    companyPayments,
+    'all',
+    undefined,
+    undefined,
+    companies,
+    companyInvoices
+  );
+  const recentTransactions = getRecentTransactions(
+    invoices,
+    partyPayments,
+    companyPayments,
+    15,
+    companyInvoices
+  );
 
   // Daily collection and reconciliation strictly for today
   const todayCollection = calculateDailyCollection(partyPayments, todayStr);
@@ -191,7 +211,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {formatPKR(analytics.companyOutstanding)}
           </div>
           <p className="text-[10px] text-slate-400 mt-1 m-0">
-            Due to Login Smart Technology
+            {companies.length > 0
+              ? `Due to ${companies.length} supplier ${companies.length === 1 ? 'company' : 'companies'}`
+              : 'Due to supplier companies'}
           </p>
         </div>
 
