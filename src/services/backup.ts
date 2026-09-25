@@ -107,7 +107,7 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
 
   const payload: BackupDataPayload = {
     backupFormatVersion: 1,
-    appVersion: '1.2',
+    appVersion: '1.3',
     databaseVersion: 4,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -462,6 +462,41 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
 
   // Step 4: Perform restore within transaction
   try {
+    // Enrich legacy invoices and party payments if companyId is missing (e.g. from v1/v2/v3 backups)
+    const enrichedInvoices = payload.invoices.map((inv) => {
+      if (!inv.companyId && payload.companyInvoices && payload.companyInvoices.length > 0) {
+        const match = payload.companyInvoices.find(
+          (ci) => String(ci.invoiceNumber).trim().toLowerCase() === String(inv.invoiceNumber).trim().toLowerCase()
+        );
+        if (match) {
+          return {
+            ...inv,
+            companyId: match.companyId,
+            companyName: match.companyName,
+          };
+        }
+      }
+      if (!inv.companyId && payload.companies && payload.companies.length === 1) {
+        return {
+          ...inv,
+          companyId: payload.companies[0].id,
+          companyName: payload.companies[0].name,
+        };
+      }
+      return inv;
+    });
+
+    const enrichedPartyPayments = payload.partyPayments.map((pmt) => {
+      if (!pmt.companyId && payload.companies && payload.companies.length === 1) {
+        return {
+          ...pmt,
+          companyId: payload.companies[0].id,
+          companyName: payload.companies[0].name,
+        };
+      }
+      return pmt;
+    });
+
     await db.transaction(
       'rw',
       [
@@ -488,11 +523,11 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
         if (payload.parties.length > 0) {
           await db.parties.bulkAdd(payload.parties);
         }
-        if (payload.invoices.length > 0) {
-          await db.invoices.bulkAdd(payload.invoices);
+        if (enrichedInvoices.length > 0) {
+          await db.invoices.bulkAdd(enrichedInvoices);
         }
-        if (payload.partyPayments.length > 0) {
-          await db.partyPayments.bulkAdd(payload.partyPayments);
+        if (enrichedPartyPayments.length > 0) {
+          await db.partyPayments.bulkAdd(enrichedPartyPayments);
         }
         if (payload.companyPayments.length > 0) {
           await db.companyPayments.bulkAdd(payload.companyPayments);

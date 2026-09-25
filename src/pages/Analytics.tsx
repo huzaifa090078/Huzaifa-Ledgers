@@ -15,6 +15,7 @@ import {
   formatPKR,
   formatDateDisplay,
 } from '../services/accounting';
+import { DateInput } from '../components/common/DateInput';
 
 interface AnalyticsProps {
   parties: Party[];
@@ -156,21 +157,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({
           {period === 'custom' && (
             <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100 animate-in fade-in duration-150">
               <div>
-                <label className="text-[10px] text-slate-500 block mb-0.5">From</label>
-                <input
-                  type="date"
+                <DateInput
+                  label="From Date"
                   value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="w-full text-xs px-2 py-1 bg-slate-50 border border-slate-300 rounded"
+                  onChange={setCustomStart}
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 block mb-0.5">To</label>
-                <input
-                  type="date"
+                <DateInput
+                  label="To Date"
                   value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="w-full text-xs px-2 py-1 bg-slate-50 border border-slate-300 rounded"
+                  onChange={setCustomEnd}
                 />
               </div>
             </div>

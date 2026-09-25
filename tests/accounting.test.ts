@@ -12,6 +12,9 @@ import {
   formatLocalTimestamp,
   formatLocalTime,
   checkCompanyInvoiceUniqueness,
+  parseToYYYYMMDD,
+  formatDateDisplay,
+  formatDate,
 } from '../src/services/accounting';
 
 describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
@@ -1101,6 +1104,12 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       // formatDate alias behaves identically
       expect(formatDate('2026-09-24')).toBe('24-09-2026');
       expect(formatDate('2027-01-05')).toBe('05-01-2027');
+
+      // parseToYYYYMMDD converts any input format back to standard YYYY-MM-DD
+      expect(parseToYYYYMMDD('24-09-2026')).toBe('2026-09-24');
+      expect(parseToYYYYMMDD('05-01-2027')).toBe('2027-01-05');
+      expect(parseToYYYYMMDD('24/09/2026')).toBe('2026-09-24');
+      expect(parseToYYYYMMDD('2026-09-24')).toBe('2026-09-24');
     });
 
     it('implements connected Party ↔ Company single master record accounting without duplicate transactions', async () => {
@@ -1409,6 +1418,203 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(partyALedger.entries[1].companyName).toBe('Company B');
       expect(partyALedger.entries[1].invoiceNumber).toBe('1');
       expect(partyALedger.finalBalance).toBe(25000); // 10,000 + 15,000
+    });
+
+    it('verifies that both Party and Company have complete Dual View functionality (View Ledger + Transactions)', () => {
+      // 1. Setup multi-company and multi-party test transactions
+      const comp1: Company = { id: 'c-1', name: 'Alpha Traders', createdAt: '', updatedAt: '' };
+      const comp2: Company = { id: 'c-2', name: 'Beta Suppliers', createdAt: '', updatedAt: '' };
+      const party1: Party = { id: 'p-1', name: 'Customer One', createdAt: '', updatedAt: '' };
+      const party2: Party = { id: 'p-2', name: 'Customer Two', createdAt: '', updatedAt: '' };
+
+      const allInvoices: PartyInvoice[] = [
+        {
+          id: 'inv-1',
+          invoiceNumber: '101',
+          companyId: comp1.id,
+          companyName: comp1.name,
+          partyId: party1.id,
+          partyName: party1.name,
+          date: '2026-09-25',
+          amount: 40000,
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+        {
+          id: 'inv-2',
+          invoiceNumber: '102',
+          companyId: comp2.id,
+          companyName: comp2.name,
+          partyId: party1.id,
+          partyName: party1.name,
+          date: '2026-09-26',
+          amount: 60000,
+          createdAt: '2026-09-26T10:00:00Z',
+          updatedAt: '2026-09-26T10:00:00Z',
+        },
+        {
+          id: 'inv-3',
+          invoiceNumber: '101', // Same number for different company
+          companyId: comp2.id,
+          companyName: comp2.name,
+          partyId: party2.id,
+          partyName: party2.name,
+          date: '2026-09-26',
+          amount: 30000,
+          createdAt: '2026-09-26T11:00:00Z',
+          updatedAt: '2026-09-26T11:00:00Z',
+        },
+      ];
+
+      const allPayments: PartyPayment[] = [
+        {
+          id: 'pmt-1',
+          companyId: comp1.id,
+          companyName: comp1.name,
+          partyId: party1.id,
+          partyName: party1.name,
+          date: '2026-09-25',
+          amount: 15000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-25T12:00:00Z',
+          updatedAt: '2026-09-25T12:00:00Z',
+        },
+        {
+          id: 'pmt-2',
+          companyId: comp2.id,
+          companyName: comp2.name,
+          partyId: party1.id,
+          partyName: party1.name,
+          date: '2026-09-27',
+          amount: 20000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-27T12:00:00Z',
+          updatedAt: '2026-09-27T12:00:00Z',
+        },
+      ];
+
+      // --- PARTY 1 VERIFICATION ---
+      // A. Party 1 View Ledger (Chronological running balance)
+      const party1Timeline = getPartyLedgerTimeline(party1.id, allInvoices, allPayments);
+      expect(party1Timeline.entries).toHaveLength(4); // inv-1, pmt-1, inv-2, pmt-2
+      expect(party1Timeline.totalDebit).toBe(100000); // 40k + 60k
+      expect(party1Timeline.totalCredit).toBe(35000); // 15k + 20k
+      expect(party1Timeline.finalBalance).toBe(65000);
+      // Badges show multiple companies
+      expect(party1Timeline.entries.map((e) => e.companyName)).toEqual([
+        'Alpha Traders',
+        'Alpha Traders',
+        'Beta Suppliers',
+        'Beta Suppliers',
+      ]);
+
+      // B. Party 1 Transactions (Invoices list & Payments list)
+      const party1Invoices = allInvoices.filter((i) => i.partyId === party1.id);
+      const party1Payments = allPayments.filter((p) => p.partyId === party1.id);
+      expect(party1Invoices).toHaveLength(2);
+      expect(party1Payments).toHaveLength(2);
+
+      // --- COMPANY 2 (Beta Suppliers) VERIFICATION ---
+      // A. Company 2 View Ledger (Chronological running balance)
+      const comp2Timeline = getCompanyLedgerTimeline(comp2.id, allInvoices, allPayments);
+      expect(comp2Timeline.entries).toHaveLength(3); // inv-2 (p1), inv-3 (p2), pmt-2 (p1)
+      expect(comp2Timeline.totalDebit).toBe(90000); // 60k + 30k
+      expect(comp2Timeline.totalCredit).toBe(20000); // 20k
+      expect(comp2Timeline.finalBalance).toBe(70000);
+      expect(comp2Timeline.entries.map((e) => e.partyName)).toEqual([
+        'Customer One',
+        'Customer Two',
+        'Customer One',
+      ]);
+
+      // B. Company 2 Transactions (Invoices list & Payments list)
+      const comp2Invoices = allInvoices.filter((i) => i.companyId === comp2.id);
+      const comp2Payments = allPayments.filter((p) => p.companyId === comp2.id);
+      expect(comp2Invoices).toHaveLength(2);
+      expect(comp2Payments).toHaveLength(1);
+
+      // Verify no duplicate master records
+      expect(allInvoices).toHaveLength(3);
+      expect(allPayments).toHaveLength(2);
+    });
+  });
+
+  describe('Historical Backup Restoration & Accounting Integrity', () => {
+    it('accurately validates, normalizes, and computes accounting balances for SmartTech_Ledger_Backup_2026-09-26 payload', () => {
+      // 11 parties
+      const parties: Party[] = [
+        { id: '1790360890551-3msdemk', name: 'Khawaja Mobiles', phone: '03030230751', address: 'Kachery Bazar', createdAt: '2026-09-25T18:28:10.539Z', updatedAt: '2026-09-25T18:28:10.539Z' },
+        { id: '1790360916070-8247d5a', name: 'Musa Mobiles', phone: '03247324677', address: 'Kachery Bazar', createdAt: '2026-09-25T18:28:36.070Z', updatedAt: '2026-09-25T18:28:36.070Z' },
+        { id: '1790360959089-eujo0si', name: 'Oppo Outlet', phone: '03276029889', address: 'Kachery Bazar', createdAt: '2026-09-25T18:29:19.089Z', updatedAt: '2026-09-25T18:29:19.089Z' },
+        { id: '1790360996764-o5huoz7', name: 'Kausar Mobiles', phone: '03117975509', address: 'Kachery Bazar', createdAt: '2026-09-25T18:29:56.764Z', updatedAt: '2026-09-25T18:29:56.764Z' },
+        { id: '1790361026340-a3b92n7', name: 'Goray Mobiles', phone: '03117975509', address: 'Kachery Bazar', createdAt: '2026-09-25T18:30:26.340Z', updatedAt: '2026-09-25T18:30:26.340Z' },
+        { id: '1790361055730-8s42qkx', name: 'Asif Watch&Mobiles', phone: '03117975509', address: 'Kachery Bazar', createdAt: '2026-09-25T18:30:55.730Z', updatedAt: '2026-09-25T18:30:55.730Z' },
+        { id: '1790361086282-vxc8lc4', name: 'Ali Smart Mobiles', phone: '03467868685', address: 'Kachery Bazar', createdAt: '2026-09-25T18:31:26.281Z', updatedAt: '2026-09-25T18:31:46.417Z' },
+        { id: '1790361137869-zw36cm9', name: 'Amir Mobiles', phone: '03006652886', address: 'Kachery Bazar', createdAt: '2026-09-25T18:32:17.869Z', updatedAt: '2026-09-25T18:32:17.869Z' },
+        { id: '1790361171465-9d2i9n3', name: 'I.Phone', phone: '03132356635', address: 'Kachery Bazar', createdAt: '2026-09-25T18:32:51.465Z', updatedAt: '2026-09-25T18:32:51.465Z' },
+        { id: '1790361195828-x5e8emt', name: 'Talha Mobiles', phone: '034023311964', address: 'Kachery Bazar', createdAt: '2026-09-25T18:33:15.828Z', updatedAt: '2026-09-25T18:33:15.828Z' },
+        { id: '1790361222215-lrzhtug', name: 'Mobile Link', phone: '03260666239', address: 'Kachery Bazar', createdAt: '2026-09-25T18:33:42.215Z', updatedAt: '2026-09-25T18:33:42.215Z' },
+      ];
+
+      // 1 Company
+      const company: Company = {
+        id: '1790253569936-6kbaahl',
+        name: 'Hassan Traders Login',
+        phone: '03230079023',
+        address: 'G-Ground HariyanWala Chock',
+        createdAt: '2026-09-24T12:39:29.936Z',
+        updatedAt: '2026-09-25T18:54:47.170Z',
+      };
+
+      // 11 Invoices totaling 216,210
+      const rawInvoices: PartyInvoice[] = [
+        { id: '1790361268476-mi794bz', invoiceNumber: '5627', partyId: '1790360890551-3msdemk', partyName: 'Khawaja Mobiles', date: '2026-09-20', amount: 8210, createdAt: '2026-09-25T18:34:28.476Z', updatedAt: '2026-09-25T18:34:28.476Z' },
+        { id: '1790361347199-9e8gz21', invoiceNumber: '5632', partyId: '1790360916070-8247d5a', partyName: 'Musa Mobiles', date: '2026-09-20', amount: 30430, createdAt: '2026-09-25T18:35:47.199Z', updatedAt: '2026-09-25T18:35:47.199Z' },
+        { id: '1790361434542-7rgirv6', invoiceNumber: '5633', partyId: '1790360959089-eujo0si', partyName: 'Oppo Outlet', date: '2026-09-20', amount: 14550, createdAt: '2026-09-25T18:37:14.542Z', updatedAt: '2026-09-25T18:37:14.542Z' },
+        { id: '1790361528655-goss1nh', invoiceNumber: '5637', partyId: '1790360996764-o5huoz7', partyName: 'Kausar Mobiles', date: '2026-09-20', amount: 22050, createdAt: '2026-09-25T18:38:48.655Z', updatedAt: '2026-09-25T18:38:48.655Z' },
+        { id: '1790361581951-djluhha', invoiceNumber: '5638', partyId: '1790361026340-a3b92n7', partyName: 'Goray Mobiles', date: '2026-09-20', amount: 28700, createdAt: '2026-09-25T18:39:41.951Z', updatedAt: '2026-09-25T18:39:41.951Z' },
+        { id: '1790361633024-miue59n', invoiceNumber: '5639', partyId: '1790361055730-8s42qkx', partyName: 'Asif Watch&Mobiles', date: '2026-09-20', amount: 24100, createdAt: '2026-09-25T18:40:33.024Z', updatedAt: '2026-09-25T18:40:33.024Z' },
+        { id: '1790361677601-tpti4zl', invoiceNumber: '5628', partyId: '1790361086282-vxc8lc4', partyName: 'Ali Smart Mobiles', date: '2026-09-20', amount: 19950, createdAt: '2026-09-25T18:41:17.600Z', updatedAt: '2026-09-25T18:41:17.600Z' },
+        { id: '1790361738108-g3trnjn', invoiceNumber: '5629', partyId: '1790361137869-zw36cm9', partyName: 'Amir Mobiles', date: '2026-09-20', amount: 23260, createdAt: '2026-09-25T18:42:18.108Z', updatedAt: '2026-09-25T18:42:18.108Z' },
+        { id: '1790361787859-8pqe4pt', invoiceNumber: '5630', partyId: '1790361171465-9d2i9n3', partyName: 'I.Phone', date: '2026-09-20', amount: 23160, createdAt: '2026-09-25T18:43:07.859Z', updatedAt: '2026-09-25T18:43:07.859Z' },
+        { id: '1790361820148-bjj0gwp', invoiceNumber: '5631', partyId: '1790361195828-x5e8emt', partyName: 'Talha Mobiles', date: '2026-09-20', amount: 11100, createdAt: '2026-09-25T18:43:40.148Z', updatedAt: '2026-09-25T18:43:40.148Z' },
+        { id: '1790361859221-mcq90mi', invoiceNumber: '5664', partyId: '1790361222215-lrzhtug', partyName: 'Mobile Link', date: '2026-09-23', amount: 10700, createdAt: '2026-09-25T18:44:19.221Z', updatedAt: '2026-09-25T18:44:19.221Z' },
+      ];
+
+      // 4 Company payments totaling 44,000
+      const companyPayments: CompanyPayment[] = [
+        { id: '1790363069055-c9591h6', companyId: company.id, companyName: company.name, date: '2026-09-22', amount: 30500, paymentMethod: 'Cash', createdAt: '2026-09-25T19:04:29.055Z', updatedAt: '2026-09-25T19:04:29.055Z' },
+        { id: '1790363080928-wbo5of6', companyId: company.id, companyName: company.name, date: '2026-09-23', amount: 9500, paymentMethod: 'Cash', createdAt: '2026-09-25T19:04:40.928Z', updatedAt: '2026-09-25T19:05:12.992Z' },
+        { id: '1790363096769-ldkwveh', companyId: company.id, companyName: company.name, date: '2026-09-24', amount: 3000, paymentMethod: 'Cash', createdAt: '2026-09-25T19:04:56.769Z', updatedAt: '2026-09-25T19:04:56.769Z' },
+        { id: '1790363142358-7z2a2ru', companyId: company.id, companyName: company.name, date: '2026-09-24', amount: 1000, paymentMethod: 'Easypaisa', createdAt: '2026-09-25T19:05:42.358Z', updatedAt: '2026-09-25T19:05:42.358Z' },
+      ];
+
+      // Enriched invoices with company
+      const unifiedInvoices: PartyInvoice[] = rawInvoices.map((inv) => ({
+        ...inv,
+        companyId: company.id,
+        companyName: company.name,
+      }));
+
+      // 24 Party payments totaling 44,000
+      const totalPartyPaymentsSum = 44000;
+      const totalInvoicesSum = 216210;
+      const expectedReceivable = totalInvoicesSum - totalPartyPaymentsSum; // 172,210
+      const expectedPayable = totalInvoicesSum - 44000; // 172,210
+
+      // Calculate Company Balance
+      const compBalance = calculateSingleCompanyBalance(company.id, unifiedInvoices, companyPayments);
+      expect(compBalance.totalInvoices).toBe(216210);
+      expect(compBalance.totalPayments).toBe(44000);
+      expect(compBalance.currentBalance).toBe(172210);
+      expect(compBalance.isAdvance).toBe(false);
+
+      // Verify Company Ledger Timeline
+      const compTimeline = getCompanyLedgerTimeline(company.id, unifiedInvoices, companyPayments);
+      expect(compTimeline.entries).toHaveLength(15); // 11 invoices + 4 payments
+      expect(compTimeline.totalDebit).toBe(216210);
+      expect(compTimeline.totalCredit).toBe(44000);
+      expect(compTimeline.finalBalance).toBe(172210);
     });
   });
 });

@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Calendar,
   Wallet,
   CheckCircle2,
   AlertCircle,
@@ -22,6 +21,7 @@ import {
   formatLocalTime,
 } from '../services/accounting';
 import { downloadDailyCollectionPDF } from '../services/pdf';
+import { DateInput } from '../components/common/DateInput';
 
 interface DailyCollectionProps {
   parties: Party[];
@@ -213,13 +213,11 @@ export const DailyCollection: React.FC<DailyCollectionProps> = ({
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="flex items-center space-x-1.5">
-              <Calendar className="w-4 h-4 text-emerald-600" />
-              <input
-                type="date"
+            <div className="w-36 sm:w-44">
+              <DateInput
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-md px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
+                onChange={setSelectedDate}
+                inputClassName="py-1 text-xs font-bold"
               />
             </div>
             <button

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Calendar, Hash, Building2 } from 'lucide-react';
+import { X, FileText, Hash, Building2 } from 'lucide-react';
 import type { Company, CompanyInvoice } from '../../types';
 import { generateId } from '../../db';
 import { getTodayDateString, formatPKR } from '../../services/accounting';
+import { DateInput } from '../common/DateInput';
 
 interface AddEditCompanyInvoiceModalProps {
   isOpen: boolean;
@@ -181,20 +182,12 @@ export const AddEditCompanyInvoiceModal: React.FC<AddEditCompanyInvoiceModalProp
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Date <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
+              <DateInput
+                label="Date"
+                required
+                value={date}
+                onChange={setDate}
+              />
             </div>
           </div>
 

@@ -279,7 +279,7 @@ export const Company: React.FC<CompanyProps> = ({
                       onClick={() => onSelectCompany(company.id)}
                       className="inline-flex items-center px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
                     >
-                      <span>View</span>
+                      <span>View Ledger</span>
                       <ArrowRight className="w-3 h-3 ml-1" />
                     </button>
                   </div>

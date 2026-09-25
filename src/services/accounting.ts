@@ -104,6 +104,31 @@ export function formatDateDisplay(dateInput?: string | Date | null): string {
 export const formatDate = formatDateDisplay;
 
 /**
+ * Convert any date format (DD-MM-YYYY, DD/MM/YYYY, etc.) to standard YYYY-MM-DD for database storage.
+ */
+export function parseToYYYYMMDD(dateInput?: string | null): string {
+  if (!dateInput) return '';
+  const trimmed = String(dateInput).trim();
+  // If already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  // If DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // If DD/MM/YYYY
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, d, m, y] = slashMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return trimmed;
+}
+
+/**
  * Format ISO-8601 UTC timestamp to Pakistan Local Date & Time (Asia/Karachi, UTC+05:00)
  * Example: '2026-09-24T11:10:00.000Z' -> '24-09-2026 04:10 PM'
  * Reliably handles midnight/date rollover without manual math hacks.
