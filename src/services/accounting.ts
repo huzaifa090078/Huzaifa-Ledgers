@@ -985,3 +985,48 @@ export function calculateDailyReconciliation(
     todayCompanyPayment,
   };
 }
+
+/**
+ * Validate Company-wise Invoice Number Uniqueness:
+ * Rule: Duplicate condition is strictly (same companyId + same normalized invoiceNumber).
+ * Different companies CAN use the same invoice number (e.g. Comp A #1 and Comp B #1 are both allowed).
+ * When editing an existing invoice, its own id is excluded.
+ */
+export function checkCompanyInvoiceUniqueness(
+  invoices: PartyInvoice[],
+  candidate: {
+    invoiceNumber: string;
+    companyId?: string;
+    companyName?: string;
+    currentInvoiceId?: string;
+  }
+): { isDuplicate: boolean; message?: string } {
+  const normCandidateNumber = candidate.invoiceNumber.trim().toUpperCase();
+  if (!normCandidateNumber) return { isDuplicate: false };
+
+  const targetCompId = candidate.companyId ? candidate.companyId.trim() : '';
+
+  const duplicate = invoices.find((inv) => {
+    if (candidate.currentInvoiceId && inv.id === candidate.currentInvoiceId) {
+      return false;
+    }
+    const invCompId = inv.companyId ? inv.companyId.trim() : '';
+    // Same company scope
+    if (invCompId !== targetCompId) {
+      return false;
+    }
+    const normInvNumber = (inv.invoiceNumber || '').trim().toUpperCase();
+    return normInvNumber === normCandidateNumber;
+  });
+
+  if (duplicate) {
+    const compDisplayName = candidate.companyName || duplicate.companyName || 'this Company';
+    return {
+      isDuplicate: true,
+      message: `Invoice #${candidate.invoiceNumber.trim()} already exists for ${compDisplayName}. Please use a different invoice number.`,
+    };
+  }
+
+  return { isDuplicate: false };
+}
+

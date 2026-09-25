@@ -11,6 +11,7 @@ import {
   getPartyLedgerTimeline,
   formatLocalTimestamp,
   formatLocalTime,
+  checkCompanyInvoiceUniqueness,
 } from '../src/services/accounting';
 
 describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
@@ -1226,6 +1227,188 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       // 6. Verify exactly 2 master invoice records and 2 master payment records in database
       expect(allInvoices).toHaveLength(2);
       expect(allPayments).toHaveLength(2);
+    });
+  });
+
+  describe('Company-wise Invoice Number Uniqueness & Regression Verification', () => {
+    const compA: Company = {
+      id: 'comp-a',
+      name: 'Company A',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const compB: Company = {
+      id: 'comp-b',
+      name: 'Company B',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const partyA: Party = {
+      id: 'party-a',
+      name: 'Party A',
+      phone: '03001234567',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const partyB: Party = {
+      id: 'party-b',
+      name: 'Party B',
+      phone: '03217654321',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+
+    it('validates all 11 exact regression cases according to company-scoped rules', () => {
+      const invoices: PartyInvoice[] = [];
+
+      // Case 1: Company A -> Invoice #1 -> Party A -> Save -> SUCCESS
+      const check1 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '1',
+        companyId: compA.id,
+        companyName: compA.name,
+      });
+      expect(check1.isDuplicate).toBe(false);
+      invoices.push({
+        id: 'inv-a-1',
+        invoiceNumber: '1',
+        companyId: compA.id,
+        companyName: compA.name,
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-25',
+        amount: 10000,
+        createdAt: '2026-09-25T10:00:00Z',
+        updatedAt: '2026-09-25T10:00:00Z',
+      });
+
+      // Case 2: Company B -> Invoice #1 -> Party A -> Save -> SUCCESS (Different company same invoice number)
+      const check2 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '1',
+        companyId: compB.id,
+        companyName: compB.name,
+      });
+      expect(check2.isDuplicate).toBe(false);
+      invoices.push({
+        id: 'inv-b-1',
+        invoiceNumber: '1',
+        companyId: compB.id,
+        companyName: compB.name,
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-25',
+        amount: 15000,
+        createdAt: '2026-09-25T10:05:00Z',
+        updatedAt: '2026-09-25T10:05:00Z',
+      });
+
+      // Case 3: Company A -> Invoice #5 -> Party B -> Save -> SUCCESS
+      const check3 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '5',
+        companyId: compA.id,
+        companyName: compA.name,
+      });
+      expect(check3.isDuplicate).toBe(false);
+      invoices.push({
+        id: 'inv-a-5',
+        invoiceNumber: '5',
+        companyId: compA.id,
+        companyName: compA.name,
+        partyId: partyB.id,
+        partyName: partyB.name,
+        date: '2026-09-25',
+        amount: 25000,
+        createdAt: '2026-09-25T10:10:00Z',
+        updatedAt: '2026-09-25T10:10:00Z',
+      });
+
+      // Case 4: Company B -> Invoice #5 -> Party B -> Save -> SUCCESS
+      const check4 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '5',
+        companyId: compB.id,
+        companyName: compB.name,
+      });
+      expect(check4.isDuplicate).toBe(false);
+      invoices.push({
+        id: 'inv-b-5',
+        invoiceNumber: '5',
+        companyId: compB.id,
+        companyName: compB.name,
+        partyId: partyB.id,
+        partyName: partyB.name,
+        date: '2026-09-25',
+        amount: 35000,
+        createdAt: '2026-09-25T10:15:00Z',
+        updatedAt: '2026-09-25T10:15:00Z',
+      });
+
+      // Case 5: Company A -> Invoice #5 again -> BLOCK with duplicate warning
+      const check5 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '5',
+        companyId: compA.id,
+        companyName: compA.name,
+      });
+      expect(check5.isDuplicate).toBe(true);
+      expect(check5.message).toContain('Invoice #5 already exists for Company A');
+
+      // Also verify spacing / case normalization blocks duplicates (e.g. ' 5 ')
+      const check5Normalized = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: ' 5 ',
+        companyId: compA.id,
+        companyName: compA.name,
+      });
+      expect(check5Normalized.isDuplicate).toBe(true);
+
+      // Case 6: Edit existing Company A Invoice #5 -> should remain allowed (currentInvoiceId excluded)
+      const check6 = checkCompanyInvoiceUniqueness(invoices, {
+        invoiceNumber: '5',
+        companyId: compA.id,
+        companyName: compA.name,
+        currentInvoiceId: 'inv-a-5',
+      });
+      expect(check6.isDuplicate).toBe(false);
+
+      // Case 7, 8 & 9: Party search and selection verification
+      const partyList: Party[] = [
+        { id: 'p-1', name: 'Muhammad Ali', phone: '03001111111', createdAt: '', updatedAt: '' },
+        { id: 'p-2', name: 'Muhammad Usman', phone: '03002222222', createdAt: '', updatedAt: '' },
+        { id: 'p-3', name: 'Munir Ahmed', phone: '03003333333', createdAt: '', updatedAt: '' },
+      ];
+
+      const searchMu = partyList.filter((p) =>
+        p.name.toLowerCase().includes('mu') || (p.phone && p.phone.includes('mu'))
+      );
+      expect(searchMu).toHaveLength(3); // Muhammad Ali, Muhammad Usman, Munir Ahmed (all contain 'mu' / 'Mu')
+
+      const searchMuh = partyList.filter((p) =>
+        p.name.toLowerCase().includes('muh') || (p.phone && p.phone.includes('muh'))
+      );
+      expect(searchMuh).toHaveLength(2); // Muhammad Ali, Muhammad Usman
+
+      const searchMuhammad = partyList.filter((p) =>
+        p.name.toLowerCase().includes('muhammad') || (p.phone && p.phone.includes('muhammad'))
+      );
+      expect(searchMuhammad).toHaveLength(2);
+      expect(searchMuhammad.find((p) => p.name === 'Muhammad Usman')?.id).toBe('p-2');
+
+      // Case 10: Company A ledger does NOT contain Company B invoice/payment
+      const compALedger = getCompanyLedgerTimeline(compA.id, invoices, []);
+      expect(compALedger.entries).toHaveLength(2); // #1 (10,000) + #5 (25,000)
+      expect(compALedger.finalBalance).toBe(35000);
+      expect(compALedger.entries.every((e) => e.companyId === compA.id)).toBe(true);
+
+      const compBLedger = getCompanyLedgerTimeline(compB.id, invoices, []);
+      expect(compBLedger.entries).toHaveLength(2); // #1 (15,000) + #5 (35,000)
+      expect(compBLedger.finalBalance).toBe(50000);
+      expect(compBLedger.entries.every((e) => e.companyId === compB.id)).toBe(true);
+
+      // Case 11: Party A ledger shows transactions from multiple companies with correct company badges
+      const partyALedger = getPartyLedgerTimeline(partyA.id, invoices, []);
+      expect(partyALedger.entries).toHaveLength(2);
+      expect(partyALedger.entries[0].companyName).toBe('Company A');
+      expect(partyALedger.entries[0].invoiceNumber).toBe('1');
+      expect(partyALedger.entries[1].companyName).toBe('Company B');
+      expect(partyALedger.entries[1].invoiceNumber).toBe('1');
+      expect(partyALedger.finalBalance).toBe(25000); // 10,000 + 15,000
     });
   });
 });

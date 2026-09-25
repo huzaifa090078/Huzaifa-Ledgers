@@ -13,6 +13,7 @@ import type {
 import type { NavTab } from './components/BottomNav';
 import { BottomNav } from './components/BottomNav';
 import { initAutoBackupSystem } from './services/autoBackup';
+import { checkCompanyInvoiceUniqueness } from './services/accounting';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -279,6 +280,15 @@ export const App: React.FC = () => {
 
   // --- Handlers for Invoices ---
   const handleSaveInvoice = async (invoice: PartyInvoice) => {
+    const uniqueness = checkCompanyInvoiceUniqueness(invoices, {
+      invoiceNumber: invoice.invoiceNumber,
+      companyId: invoice.companyId,
+      companyName: invoice.companyName,
+      currentInvoiceId: invoice.id,
+    });
+    if (uniqueness.isDuplicate) {
+      throw new Error(uniqueness.message);
+    }
     await db.invoices.put(invoice);
   };
 
@@ -521,6 +531,7 @@ export const App: React.FC = () => {
         onSave={handleSaveInvoice}
         parties={parties}
         companies={companies}
+        invoices={invoices}
         defaultPartyId={invoiceDefaultPartyId}
         defaultCompanyId={invoiceDefaultCompanyId}
         editingInvoice={editingInvoice}
