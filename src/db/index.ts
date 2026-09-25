@@ -59,6 +59,10 @@ export class SmartTechLedgerDatabase extends Dexie {
         console.warn('Migration to version 3 upgrade note:', err);
       }
     });
+    this.version(4).stores({
+      invoices: 'id, invoiceNumber, partyId, partyName, companyId, companyName, date, createdAt, updatedAt',
+      partyPayments: 'id, partyId, partyName, companyId, companyName, date, paymentMethod, createdAt, updatedAt',
+    });
   }
 }
 

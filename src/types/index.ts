@@ -12,6 +12,8 @@ export interface PartyInvoice {
   invoiceNumber: string;
   partyId: string;
   partyName: string;
+  companyId?: string;
+  companyName?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   description?: string;
@@ -25,6 +27,10 @@ export interface PartyPayment {
   id: string;
   partyId: string;
   partyName: string;
+  companyId?: string;
+  companyName?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   paymentMethod: PartyPaymentMethod;
@@ -50,6 +56,8 @@ export interface CompanyInvoice {
   invoiceNumber: string;
   companyId: string;
   companyName: string;
+  partyId?: string;
+  partyName?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   description?: string;
@@ -61,6 +69,8 @@ export interface CompanyPayment {
   id: string;
   companyId?: string;
   companyName?: string;
+  partyId?: string;
+  partyName?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   paymentMethod: CompanyPaymentMethod;
@@ -86,6 +96,8 @@ export interface PartyLedgerEntry {
   debit: number;
   credit: number;
   balance: number;
+  companyId?: string;
+  companyName?: string;
   paymentMethod?: PartyPaymentMethod;
   invoiceNumber?: string;
   rawItem: PartyInvoice | PartyPayment;
@@ -132,9 +144,13 @@ export interface CompanyLedgerEntry {
   debit: number;
   credit: number;
   balance: number;
-  paymentMethod?: CompanyPaymentMethod;
+  partyId?: string;
+  partyName?: string;
+  companyId?: string;
+  companyName?: string;
+  paymentMethod?: CompanyPaymentMethod | PartyPaymentMethod;
   invoiceNumber?: string;
-  rawItem: CompanyInvoice | CompanyPayment;
+  rawItem: PartyInvoice | PartyPayment | CompanyInvoice | CompanyPayment;
 }
 
 export interface CompanyPeriodLedger {

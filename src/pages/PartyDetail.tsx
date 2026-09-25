@@ -342,10 +342,15 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                         <span className="text-xs font-bold text-slate-900">
                           {isInvoice ? `Invoice #${entry.invoiceNumber}` : `Payment - ${entry.paymentMethod}`}
                         </span>
+                        {entry.companyName && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
+                            {entry.companyName}
+                          </span>
+                        )}
                         <span className="text-[10px] text-slate-400 font-mono">
                           {formatDateDisplay(entry.date)}
                         </span>

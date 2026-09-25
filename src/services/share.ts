@@ -127,8 +127,8 @@ export async function sharePartyLedger(
  */
 export function buildCompanyLedgerSummaryText(
   company: { name: string; id: string },
-  invoices: CompanyInvoice[],
-  payments: CompanyPayment[]
+  invoices: (PartyInvoice | CompanyInvoice)[],
+  payments: (PartyPayment | CompanyPayment)[]
 ): string {
   const balanceInfo = calculateSingleCompanyBalance(company.id, invoices, payments);
 
@@ -159,8 +159,8 @@ export function buildCompanyLedgerSummaryText(
  */
 export async function shareCompanyLedger(
   company: Company,
-  invoices: CompanyInvoice[],
-  payments: CompanyPayment[]
+  invoices: (PartyInvoice | CompanyInvoice)[],
+  payments: (PartyPayment | CompanyPayment)[]
 ): Promise<ShareResult> {
   const summaryText = buildCompanyLedgerSummaryText(company, invoices, payments);
 

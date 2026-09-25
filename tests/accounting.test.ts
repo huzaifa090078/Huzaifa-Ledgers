@@ -1101,6 +1101,132 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(formatDate('2026-09-24')).toBe('24-09-2026');
       expect(formatDate('2027-01-05')).toBe('05-01-2027');
     });
+
+    it('implements connected Party ↔ Company single master record accounting without duplicate transactions', async () => {
+      // 1. Setup Companies and Parties
+      const compA: Company = { id: 'comp-A', name: 'Company A', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
+      const compB: Company = { id: 'comp-B', name: 'Company B', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
+      const partyA: Party = { id: 'party-A', name: 'Party A', phone: '03001234567', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
+      const partyB: Party = { id: 'party-B', name: 'Party B', phone: '03007654321', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
+
+      // Single master list of invoices and payments (as in Dexie db.invoices and db.partyPayments)
+      const allInvoices: PartyInvoice[] = [];
+      const allPayments: PartyPayment[] = [];
+
+      // 2. Step 1: Create Invoice 1: Company A, Party A, INV-001, Rs 50,000
+      const inv1: PartyInvoice = {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        companyId: compA.id,
+        companyName: compA.name,
+        date: '2026-09-24',
+        amount: 50000,
+        createdAt: '2026-09-24T10:30:00Z',
+        updatedAt: '2026-09-24T10:30:00Z',
+      };
+      allInvoices.push(inv1);
+
+      // Verify Party A Ledger
+      const partyATimeline1 = getPartyLedgerTimeline(partyA.id, allInvoices, allPayments);
+      expect(partyATimeline1.entries).toHaveLength(1);
+      expect(partyATimeline1.entries[0].invoiceNumber).toBe('INV-001');
+      expect(partyATimeline1.entries[0].companyName).toBe('Company A');
+      expect(partyATimeline1.finalBalance).toBe(50000);
+
+      // Verify Company A Ledger
+      const compATimeline1 = getCompanyLedgerTimeline(compA.id, allInvoices, allPayments);
+      expect(compATimeline1.entries).toHaveLength(1);
+      expect(compATimeline1.entries[0].partyName).toBe('Party A');
+      expect(compATimeline1.entries[0].invoiceNumber).toBe('INV-001');
+      expect(compATimeline1.finalBalance).toBe(50000);
+
+      // 3. Step 2: Record Payment: Party A, Company A, Rs 10,000 Cash
+      const pmt1: PartyPayment = {
+        id: 'pmt-1',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        companyId: compA.id,
+        companyName: compA.name,
+        invoiceId: inv1.id,
+        invoiceNumber: inv1.invoiceNumber,
+        date: '2026-09-25',
+        amount: 10000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-25T11:00:00Z',
+        updatedAt: '2026-09-25T11:00:00Z',
+      };
+      allPayments.push(pmt1);
+
+      // Verify Party A Ledger Balance
+      const partyABalance2 = calculatePartyBalance(partyA.id, allInvoices, allPayments);
+      expect(partyABalance2.currentBalance).toBe(40000);
+
+      // Verify Company A Ledger Balance
+      const compABalance2 = calculateSingleCompanyBalance(compA.id, allInvoices, allPayments);
+      expect(compABalance2.currentBalance).toBe(40000);
+
+      // 4. Step 3: Create Invoice 2: Company B, Party A, INV-002, Rs 30,000
+      const inv2: PartyInvoice = {
+        id: 'inv-2',
+        invoiceNumber: 'INV-002',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        companyId: compB.id,
+        companyName: compB.name,
+        date: '2026-09-26',
+        amount: 30000,
+        createdAt: '2026-09-26T10:00:00Z',
+        updatedAt: '2026-09-26T10:00:00Z',
+      };
+      allInvoices.push(inv2);
+
+      // Party A Ledger contains invoices from BOTH companies
+      const partyATimeline3 = getPartyLedgerTimeline(partyA.id, allInvoices, allPayments);
+      expect(partyATimeline3.entries).toHaveLength(3); // INV-001 (Comp A), Payment (Comp A), INV-002 (Comp B)
+      expect(partyATimeline3.entries.map((e) => e.companyName)).toEqual(['Company A', 'Company A', 'Company B']);
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(70000);
+
+      // Company A Ledger ONLY contains Company A transactions
+      const compATimeline3 = getCompanyLedgerTimeline(compA.id, allInvoices, allPayments);
+      expect(compATimeline3.entries).toHaveLength(2);
+      expect(compATimeline3.finalBalance).toBe(40000);
+
+      // Company B Ledger ONLY contains Company B transactions
+      const compBTimeline3 = getCompanyLedgerTimeline(compB.id, allInvoices, allPayments);
+      expect(compBTimeline3.entries).toHaveLength(1);
+      expect(compBTimeline3.entries[0].invoiceNumber).toBe('INV-002');
+      expect(compBTimeline3.finalBalance).toBe(30000);
+
+      // 5. Step 4: Add Payment against Company B: Party A, Company B, Rs 10,000 Cash
+      const pmt2: PartyPayment = {
+        id: 'pmt-2',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        companyId: compB.id,
+        companyName: compB.name,
+        date: '2026-09-27',
+        amount: 10000,
+        paymentMethod: 'Bank',
+        createdAt: '2026-09-27T12:00:00Z',
+        updatedAt: '2026-09-27T12:00:00Z',
+      };
+      allPayments.push(pmt2);
+
+      // Party A balance changes: 70,000 - 10,000 = 60,000
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(60000);
+
+      // Company B balance changes: 30,000 - 10,000 = 20,000
+      expect(calculateSingleCompanyBalance(compB.id, allInvoices, allPayments).currentBalance).toBe(20000);
+
+      // Company A balance does NOT change: remains 40,000
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allPayments).currentBalance).toBe(40000);
+
+      // 6. Verify exactly 2 master invoice records and 2 master payment records in database
+      expect(allInvoices).toHaveLength(2);
+      expect(allPayments).toHaveLength(2);
+    });
   });
 });
 

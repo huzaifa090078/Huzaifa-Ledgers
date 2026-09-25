@@ -8,13 +8,13 @@ import {
   Trash2,
   Building2,
 } from 'lucide-react';
-import type { Company as CompanyType, CompanyInvoice, CompanyPayment } from '../types';
+import type { Company as CompanyType, PartyInvoice, CompanyInvoice, PartyPayment, CompanyPayment } from '../types';
 import { calculateSingleCompanyBalance, formatPKR } from '../services/accounting';
 
 interface CompanyProps {
   companies: CompanyType[];
-  companyInvoices: CompanyInvoice[];
-  companyPayments: CompanyPayment[];
+  companyInvoices: (PartyInvoice | CompanyInvoice)[];
+  companyPayments: (PartyPayment | CompanyPayment)[];
   onOpenAddCompany: () => void;
   onEditCompany: (company: CompanyType) => void;
   onDeleteCompany: (company: CompanyType, hasTransactions: boolean) => void;

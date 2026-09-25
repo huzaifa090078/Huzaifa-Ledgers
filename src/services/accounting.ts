@@ -253,6 +253,8 @@ export function getPartyLedgerTimeline(
         debit,
         credit: 0,
         balance: runningBalance,
+        companyId: inv.companyId,
+        companyName: inv.companyName,
         invoiceNumber: inv.invoiceNumber,
         rawItem: inv,
       };
@@ -269,6 +271,8 @@ export function getPartyLedgerTimeline(
         debit: 0,
         credit,
         balance: runningBalance,
+        companyId: pmt.companyId,
+        companyName: pmt.companyName,
         paymentMethod: pmt.paymentMethod,
         rawItem: pmt,
       };
@@ -389,8 +393,8 @@ export function calculateCompanyBalance(
  */
 export function calculateSingleCompanyBalance(
   companyId: string,
-  allInvoices: CompanyInvoice[],
-  allPayments: CompanyPayment[]
+  allInvoices: (PartyInvoice | CompanyInvoice)[],
+  allPayments: (PartyPayment | CompanyPayment)[]
 ): IndividualCompanyBalanceSummary {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
   const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
@@ -424,20 +428,20 @@ export function calculateSingleCompanyBalance(
 
 /**
  * Build chronological ledger timeline for a company with running balances.
- * Purchases/Invoices add to payable balance (Debit).
- * Payments subtract from payable balance (Credit).
+ * Invoices add to company balance (Debit).
+ * Payments subtract from company balance (Credit).
  */
 export function getCompanyLedgerTimeline(
   companyId: string,
-  allInvoices: CompanyInvoice[],
-  allPayments: CompanyPayment[]
+  allInvoices: (PartyInvoice | CompanyInvoice)[],
+  allPayments: (PartyPayment | CompanyPayment)[]
 ): { entries: CompanyLedgerEntry[]; finalBalance: number; totalDebit: number; totalCredit: number } {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
   const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
 
   type RawCompanyItem =
-    | { kind: 'inv'; data: CompanyInvoice; date: string; time: string }
-    | { kind: 'pmt'; data: CompanyPayment; date: string; time: string };
+    | { kind: 'inv'; data: PartyInvoice | CompanyInvoice; date: string; time: string }
+    | { kind: 'pmt'; data: PartyPayment | CompanyPayment; date: string; time: string };
 
   const rawList: RawCompanyItem[] = [
     ...companyInvoices.map((inv) => ({
@@ -472,14 +476,22 @@ export function getCompanyLedgerTimeline(
       const debit = Number(inv.amount) || 0;
       totalDebit += debit;
       runningBalance += debit;
+      const partyName = (inv as PartyInvoice).partyName || (inv as CompanyInvoice).partyName;
+      const partyId = (inv as PartyInvoice).partyId || (inv as CompanyInvoice).partyId;
       return {
         id: inv.id,
         date: inv.date,
         type: 'invoice',
-        description: `Purchase / Bill #${inv.invoiceNumber}${inv.description ? ` - ${inv.description}` : ''}`,
+        description: partyName
+          ? `Invoice #${inv.invoiceNumber} • ${partyName}${inv.description ? ` - ${inv.description}` : ''}`
+          : `Invoice / Bill #${inv.invoiceNumber}${inv.description ? ` - ${inv.description}` : ''}`,
         debit,
         credit: 0,
         balance: runningBalance,
+        partyId,
+        partyName,
+        companyId: inv.companyId,
+        companyName: inv.companyName,
         invoiceNumber: inv.invoiceNumber,
         rawItem: inv,
       };
@@ -488,14 +500,22 @@ export function getCompanyLedgerTimeline(
       const credit = Number(pmt.amount) || 0;
       totalCredit += credit;
       runningBalance -= credit;
+      const partyName = (pmt as PartyPayment).partyName || (pmt as CompanyPayment).partyName;
+      const partyId = (pmt as PartyPayment).partyId || (pmt as CompanyPayment).partyId;
       return {
         id: pmt.id,
         date: pmt.date,
         type: 'payment',
-        description: `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
+        description: partyName
+          ? `Payment • ${partyName} - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`
+          : `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
         debit: 0,
         credit,
         balance: runningBalance,
+        partyId,
+        partyName,
+        companyId: pmt.companyId,
+        companyName: pmt.companyName,
         paymentMethod: pmt.paymentMethod,
         rawItem: pmt,
       };
@@ -514,13 +534,13 @@ export function getCompanyLedgerTimeline(
  * Calculates company ledger transactions and balances for a specific date range.
  * - Opening balance is calculated from all transactions strictly prior to startDate.
  * - Only transactions between startDate and endDate (inclusive) are returned in entries.
- * - Closing balance = Opening Balance + Period Purchases - Period Payments.
+ * - Closing balance = Opening Balance + Period Purchases/Invoices - Period Payments.
  * - If no startDate is specified, it returns the full ledger.
  */
 export function calculateCompanyPeriodLedger(
   companyId: string,
-  allInvoices: CompanyInvoice[],
-  allPayments: CompanyPayment[],
+  allInvoices: (PartyInvoice | CompanyInvoice)[],
+  allPayments: (PartyPayment | CompanyPayment)[],
   startDate?: string,
   endDate?: string
 ): CompanyPeriodLedger {
@@ -547,7 +567,7 @@ export function calculateCompanyPeriodLedger(
   const periodInvoicesTotal = periodEntries.reduce((sum, e) => sum + e.debit, 0);
   const periodPaymentsTotal = periodEntries.reduce((sum, e) => sum + e.credit, 0);
 
-  // Closing balance = Opening Balance + Period Purchases - Period Payments
+  // Closing balance = Opening Balance + Period Purchases/Invoices - Period Payments
   const closingBalance = openingBalance + periodInvoicesTotal - periodPaymentsTotal;
   const isClosingAdvance = closingBalance < 0;
 

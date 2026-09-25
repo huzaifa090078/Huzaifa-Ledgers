@@ -8,8 +8,6 @@ import type {
   PartyInvoice,
   PartyPayment,
   Company,
-  CompanyInvoice,
-  CompanyPayment,
   DailyReconciliation,
 } from './types';
 import type { NavTab } from './components/BottomNav';
@@ -31,8 +29,6 @@ import { AddEditPartyModal } from './components/modals/AddEditPartyModal';
 import { AddEditInvoiceModal } from './components/modals/AddEditInvoiceModal';
 import { RecordPartyPaymentModal } from './components/modals/RecordPartyPaymentModal';
 import { AddEditCompanyModal } from './components/modals/AddEditCompanyModal';
-import { AddEditCompanyInvoiceModal } from './components/modals/AddEditCompanyInvoiceModal';
-import { RecordCompanyPaymentModal } from './components/modals/RecordCompanyPaymentModal';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
 
 export const App: React.FC = () => {
@@ -57,22 +53,16 @@ export const App: React.FC = () => {
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<PartyInvoice | null>(null);
   const [invoiceDefaultPartyId, setInvoiceDefaultPartyId] = useState<string | undefined>();
+  const [invoiceDefaultCompanyId, setInvoiceDefaultCompanyId] = useState<string | undefined>();
 
   const [isPartyPaymentModalOpen, setIsPartyPaymentModalOpen] = useState(false);
   const [editingPartyPayment, setEditingPartyPayment] = useState<PartyPayment | null>(null);
   const [paymentDefaultPartyId, setPaymentDefaultPartyId] = useState<string | undefined>();
+  const [paymentDefaultCompanyId, setPaymentDefaultCompanyId] = useState<string | undefined>();
 
   // Company Modals Visibility & Editing State
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-
-  const [isCompanyInvoiceModalOpen, setIsCompanyInvoiceModalOpen] = useState(false);
-  const [editingCompanyInvoice, setEditingCompanyInvoice] = useState<CompanyInvoice | null>(null);
-  const [companyInvoiceDefaultCompanyId, setCompanyInvoiceDefaultCompanyId] = useState<string | undefined>();
-
-  const [isCompanyPaymentModalOpen, setIsCompanyPaymentModalOpen] = useState(false);
-  const [editingCompanyPayment, setEditingCompanyPayment] = useState<CompanyPayment | null>(null);
-  const [companyPaymentDefaultCompanyId, setCompanyPaymentDefaultCompanyId] = useState<string | undefined>();
 
   // Generic Delete Confirmation State
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -102,8 +92,6 @@ export const App: React.FC = () => {
     isInvoiceModalOpen,
     isPartyPaymentModalOpen,
     isCompanyModalOpen,
-    isCompanyInvoiceModalOpen,
-    isCompanyPaymentModalOpen,
     deleteModalOpen: deleteModalState.isOpen,
   });
 
@@ -115,8 +103,6 @@ export const App: React.FC = () => {
     isInvoiceModalOpen,
     isPartyPaymentModalOpen,
     isCompanyModalOpen,
-    isCompanyInvoiceModalOpen,
-    isCompanyPaymentModalOpen,
     deleteModalOpen: deleteModalState.isOpen,
   };
 
@@ -161,16 +147,8 @@ export const App: React.FC = () => {
       setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
       return true;
     }
-    if (stateRef.current.isCompanyInvoiceModalOpen) {
-      setIsCompanyInvoiceModalOpen(false);
-      return true;
-    }
     if (stateRef.current.isCompanyModalOpen) {
       setIsCompanyModalOpen(false);
-      return true;
-    }
-    if (stateRef.current.isCompanyPaymentModalOpen) {
-      setIsCompanyPaymentModalOpen(false);
       return true;
     }
     if (stateRef.current.isPartyModalOpen) {
@@ -304,15 +282,17 @@ export const App: React.FC = () => {
     await db.invoices.put(invoice);
   };
 
-  const handleOpenAddInvoice = (partyId?: string) => {
+  const handleOpenAddInvoice = (partyId?: string, companyId?: string) => {
     setEditingInvoice(null);
-    setInvoiceDefaultPartyId(partyId || (parties.length > 0 ? parties[0].id : undefined));
+    setInvoiceDefaultPartyId(partyId);
+    setInvoiceDefaultCompanyId(companyId || (companies.length === 1 ? companies[0].id : undefined));
     setIsInvoiceModalOpen(true);
   };
 
   const handleEditInvoice = (invoice: PartyInvoice) => {
     setEditingInvoice(invoice);
     setInvoiceDefaultPartyId(invoice.partyId);
+    setInvoiceDefaultCompanyId(invoice.companyId);
     setIsInvoiceModalOpen(true);
   };
 
@@ -321,7 +301,7 @@ export const App: React.FC = () => {
       isOpen: true,
       title: 'Delete Invoice',
       message: `Are you sure you want to delete Invoice #${invoice.invoiceNumber} (Rs ${invoice.amount.toLocaleString()})?`,
-      warningNote: 'Deleting this invoice will automatically reduce the party Amount Due.',
+      warningNote: 'Deleting this invoice will automatically update both Party and Company ledgers.',
       action: async () => {
         await db.invoices.delete(invoice.id);
       },
@@ -333,24 +313,26 @@ export const App: React.FC = () => {
     await db.partyPayments.put(payment);
   };
 
-  const handleOpenRecordPartyPayment = (partyId?: string) => {
+  const handleOpenRecordPartyPayment = (partyId?: string, companyId?: string) => {
     setEditingPartyPayment(null);
-    setPaymentDefaultPartyId(partyId || (parties.length > 0 ? parties[0].id : undefined));
+    setPaymentDefaultPartyId(partyId);
+    setPaymentDefaultCompanyId(companyId || (companies.length === 1 ? companies[0].id : undefined));
     setIsPartyPaymentModalOpen(true);
   };
 
   const handleEditPartyPayment = (payment: PartyPayment) => {
     setEditingPartyPayment(payment);
     setPaymentDefaultPartyId(payment.partyId);
+    setPaymentDefaultCompanyId(payment.companyId);
     setIsPartyPaymentModalOpen(true);
   };
 
   const handleDeletePartyPayment = (payment: PartyPayment) => {
     setDeleteModalState({
       isOpen: true,
-      title: 'Delete Party Payment',
+      title: 'Delete Payment',
       message: `Are you sure you want to delete this payment of Rs ${payment.amount.toLocaleString()} received via ${payment.paymentMethod}?`,
-      warningNote: 'This will increase the party Remaining Amount.',
+      warningNote: 'Deleting this payment will automatically update both Party and Company ledgers.',
       action: async () => {
         await db.partyPayments.delete(payment.id);
       },
@@ -393,64 +375,6 @@ export const App: React.FC = () => {
     });
   };
 
-  // --- Handlers for Company Purchases / Invoices ---
-  const handleSaveCompanyInvoice = async (invoice: CompanyInvoice) => {
-    await db.companyInvoices.put(invoice);
-  };
-
-  const handleOpenAddCompanyInvoice = (companyId?: string) => {
-    setEditingCompanyInvoice(null);
-    setCompanyInvoiceDefaultCompanyId(companyId || (companies.length > 0 ? companies[0].id : undefined));
-    setIsCompanyInvoiceModalOpen(true);
-  };
-
-  const handleEditCompanyInvoice = (invoice: CompanyInvoice) => {
-    setEditingCompanyInvoice(invoice);
-    setCompanyInvoiceDefaultCompanyId(invoice.companyId);
-    setIsCompanyInvoiceModalOpen(true);
-  };
-
-  const handleDeleteCompanyInvoice = (invoice: CompanyInvoice) => {
-    setDeleteModalState({
-      isOpen: true,
-      title: 'Delete Purchase Invoice',
-      message: `Are you sure you want to delete Invoice #${invoice.invoiceNumber || 'N/A'} (Rs ${invoice.amount.toLocaleString()})?`,
-      warningNote: 'Deleting this purchase will automatically reduce your balance payable to this company.',
-      action: async () => {
-        await db.companyInvoices.delete(invoice.id);
-      },
-    });
-  };
-
-  // --- Handlers for Company Payments ---
-  const handleSaveCompanyPayment = async (payment: CompanyPayment) => {
-    await db.companyPayments.put(payment);
-  };
-
-  const handleOpenRecordCompanyPayment = (companyId?: string) => {
-    setEditingCompanyPayment(null);
-    setCompanyPaymentDefaultCompanyId(companyId || (companies.length > 0 ? companies[0].id : undefined));
-    setIsCompanyPaymentModalOpen(true);
-  };
-
-  const handleEditCompanyPayment = (payment: CompanyPayment) => {
-    setEditingCompanyPayment(payment);
-    setCompanyPaymentDefaultCompanyId(payment.companyId);
-    setIsCompanyPaymentModalOpen(true);
-  };
-
-  const handleDeleteCompanyPayment = (payment: CompanyPayment) => {
-    setDeleteModalState({
-      isOpen: true,
-      title: 'Delete Company Payment',
-      message: `Are you sure you want to delete this payment of Rs ${payment.amount.toLocaleString()}?`,
-      warningNote: 'This will increase your balance payable to the company.',
-      action: async () => {
-        await db.companyPayments.delete(payment.id);
-      },
-    });
-  };
-
   // --- Handlers for Daily Reconciliation ---
   const handleSaveReconciliation = async (recon: DailyReconciliation) => {
     await db.dailyReconciliations.put(recon);
@@ -476,15 +400,15 @@ export const App: React.FC = () => {
         ) : selectedCompany ? (
           <CompanyDetail
             company={selectedCompany}
-            invoices={companyInvoices}
-            companyPayments={companyPayments}
+            invoices={invoices}
+            partyPayments={partyPayments}
             onBack={handleBack}
-            onOpenAddInvoice={(compKey) => handleOpenAddCompanyInvoice(compKey)}
-            onOpenRecordPayment={(compKey) => handleOpenRecordCompanyPayment(compKey)}
-            onEditInvoice={handleEditCompanyInvoice}
-            onDeleteInvoice={handleDeleteCompanyInvoice}
-            onEditPayment={handleEditCompanyPayment}
-            onDeletePayment={handleDeleteCompanyPayment}
+            onOpenAddInvoice={(compKey) => handleOpenAddInvoice(undefined, compKey)}
+            onOpenRecordPayment={(compKey) => handleOpenRecordPartyPayment(undefined, compKey)}
+            onEditInvoice={(inv) => handleEditInvoice(inv as PartyInvoice)}
+            onDeleteInvoice={(inv) => handleDeleteInvoice(inv as PartyInvoice)}
+            onEditPayment={(pmt) => handleEditPartyPayment(pmt as PartyPayment)}
+            onDeletePayment={(pmt) => handleDeletePartyPayment(pmt as PartyPayment)}
           />
         ) : (
           <>
@@ -500,7 +424,7 @@ export const App: React.FC = () => {
                 onOpenAddParty={handleOpenAddParty}
                 onOpenAddInvoice={() => handleOpenAddInvoice()}
                 onOpenRecordPartyPayment={() => handleOpenRecordPartyPayment()}
-                onOpenRecordCompanyPayment={() => handleOpenRecordCompanyPayment()}
+                onOpenRecordCompanyPayment={() => handleOpenRecordPartyPayment()}
                 onSelectParty={handleSelectParty}
                 onNavigateToCompany={() => handleTabChange('company')}
                 onNavigateToCollection={() => handleTabChange('collection')}
@@ -528,22 +452,22 @@ export const App: React.FC = () => {
                 onEditParty={handleEditParty}
                 onDeleteParty={handleDeleteParty}
                 onSelectParty={handleSelectParty}
-                onQuickAddInvoice={handleOpenAddInvoice}
-                onQuickRecordPayment={handleOpenRecordPartyPayment}
+                onQuickAddInvoice={(partyKey) => handleOpenAddInvoice(partyKey)}
+                onQuickRecordPayment={(partyKey) => handleOpenRecordPartyPayment(partyKey)}
               />
             )}
 
             {activeTab === 'company' && (
               <CompanyPage
                 companies={companies}
-                companyInvoices={companyInvoices}
-                companyPayments={companyPayments}
+                companyInvoices={invoices}
+                companyPayments={partyPayments}
                 onOpenAddCompany={handleOpenAddCompany}
                 onEditCompany={handleEditCompany}
                 onDeleteCompany={handleDeleteCompany}
                 onSelectCompany={handleSelectCompany}
-                onQuickAddInvoice={handleOpenAddCompanyInvoice}
-                onQuickRecordPayment={handleOpenRecordCompanyPayment}
+                onQuickAddInvoice={(compKey) => handleOpenAddInvoice(undefined, compKey)}
+                onQuickRecordPayment={(compKey) => handleOpenRecordPartyPayment(undefined, compKey)}
               />
             )}
 
@@ -596,7 +520,9 @@ export const App: React.FC = () => {
         onClose={() => setIsInvoiceModalOpen(false)}
         onSave={handleSaveInvoice}
         parties={parties}
+        companies={companies}
         defaultPartyId={invoiceDefaultPartyId}
+        defaultCompanyId={invoiceDefaultCompanyId}
         editingInvoice={editingInvoice}
       />
 
@@ -605,7 +531,10 @@ export const App: React.FC = () => {
         onClose={() => setIsPartyPaymentModalOpen(false)}
         onSave={handleSavePartyPayment}
         parties={parties}
+        companies={companies}
+        invoices={invoices}
         defaultPartyId={paymentDefaultPartyId}
+        defaultCompanyId={paymentDefaultCompanyId}
         editingPayment={editingPartyPayment}
       />
 
@@ -615,24 +544,6 @@ export const App: React.FC = () => {
         onClose={() => setIsCompanyModalOpen(false)}
         onSave={handleSaveCompany}
         editingCompany={editingCompany}
-      />
-
-      <AddEditCompanyInvoiceModal
-        isOpen={isCompanyInvoiceModalOpen}
-        onClose={() => setIsCompanyInvoiceModalOpen(false)}
-        onSave={handleSaveCompanyInvoice}
-        companies={companies}
-        defaultCompanyId={companyInvoiceDefaultCompanyId}
-        editingInvoice={editingCompanyInvoice}
-      />
-
-      <RecordCompanyPaymentModal
-        isOpen={isCompanyPaymentModalOpen}
-        onClose={() => setIsCompanyPaymentModalOpen(false)}
-        onSave={handleSaveCompanyPayment}
-        companies={companies}
-        defaultCompanyId={companyPaymentDefaultCompanyId}
-        editingPayment={editingCompanyPayment}
       />
 
       {/* Common Confirmation Modal */}

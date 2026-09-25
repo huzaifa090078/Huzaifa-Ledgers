@@ -108,7 +108,7 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
   const payload: BackupDataPayload = {
     backupFormatVersion: 1,
     appVersion: '1.2',
-    databaseVersion: 3,
+    databaseVersion: 4,
     createdAt: timestamp,
     updatedAt: timestamp,
     appName: 'Login Smart Technology Business Ledger',

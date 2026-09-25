@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Calendar, Hash, AlertCircle } from 'lucide-react';
-import type { Party, PartyInvoice } from '../../types';
+import { X, FileText, Calendar, Hash, Building2, User } from 'lucide-react';
+import type { Party, Company, PartyInvoice } from '../../types';
 import { generateId } from '../../db';
 import { getTodayDateString, formatPKR } from '../../services/accounting';
 
@@ -9,7 +9,9 @@ interface AddEditInvoiceModalProps {
   onClose: () => void;
   onSave: (invoice: PartyInvoice) => Promise<void>;
   parties: Party[];
+  companies?: Company[];
   defaultPartyId?: string;
+  defaultCompanyId?: string;
   editingInvoice?: PartyInvoice | null;
 }
 
@@ -18,10 +20,13 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
   onClose,
   onSave,
   parties,
+  companies = [],
   defaultPartyId,
+  defaultCompanyId,
   editingInvoice,
 }) => {
   const [partyId, setPartyId] = useState(defaultPartyId || '');
+  const [companyId, setCompanyId] = useState(defaultCompanyId || '');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [date, setDate] = useState(getTodayDateString());
   const [amount, setAmount] = useState('');
@@ -32,19 +37,32 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
   useEffect(() => {
     if (editingInvoice) {
       setPartyId(editingInvoice.partyId);
+      setCompanyId(editingInvoice.companyId || defaultCompanyId || (companies.length === 1 ? companies[0].id : ''));
       setInvoiceNumber(editingInvoice.invoiceNumber);
       setDate(editingInvoice.date);
       setAmount(String(editingInvoice.amount));
       setDescription(editingInvoice.description || '');
     } else {
       setPartyId(defaultPartyId || (parties.length > 0 ? parties[0].id : ''));
+      setCompanyId(defaultCompanyId || (companies.length === 1 ? companies[0].id : ''));
       setInvoiceNumber('');
       setDate(getTodayDateString());
       setAmount('');
       setDescription('');
     }
     setError('');
-  }, [editingInvoice, defaultPartyId, parties, isOpen]);
+  }, [editingInvoice, defaultPartyId, defaultCompanyId, parties, companies, isOpen]);
+
+  // Listen to Android hardware back button
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleAppBack = (e: Event) => {
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('app:back', handleAppBack);
+    return () => window.removeEventListener('app:back', handleAppBack);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -52,7 +70,11 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
     e.preventDefault();
 
     if (!partyId) {
-      setError('Please select a party/shop.');
+      setError('Please select a party/customer.');
+      return;
+    }
+    if (companies.length > 0 && !companyId) {
+      setError('Please select a company/supplier for this invoice.');
       return;
     }
     if (!invoiceNumber.trim()) {
@@ -71,6 +93,8 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
       return;
     }
 
+    const selectedCompany = companies.find((c) => c.id === companyId);
+
     try {
       setLoading(true);
       const now = new Date().toISOString();
@@ -79,6 +103,8 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
         invoiceNumber: invoiceNumber.trim().toUpperCase(),
         partyId,
         partyName: selectedParty.name,
+        companyId: companyId || undefined,
+        companyName: selectedCompany ? selectedCompany.name : undefined,
         date: date || getTodayDateString(),
         amount: Math.round(numAmount),
         description: description.trim() || undefined,
@@ -89,11 +115,14 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
       await onSave(invoiceData);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save company invoice.');
+      setError(err.message || 'Failed to save invoice.');
     } finally {
       setLoading(false);
     }
   };
+
+  const selectedPartyObj = parties.find((p) => p.id === partyId);
+  const selectedCompanyObj = companies.find((c) => c.id === companyId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
@@ -102,7 +131,7 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
           <div className="flex items-center space-x-2">
             <FileText className="w-5 h-5 text-sky-600" />
             <h2 className="text-base font-semibold text-slate-800 m-0">
-              {editingInvoice ? 'Edit Company Invoice' : 'Add Company Invoice / Sale'}
+              {editingInvoice ? 'Edit Invoice' : 'Create Invoice'}
             </h2>
           </div>
           <button
@@ -120,30 +149,67 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
             </div>
           )}
 
-          {/* Info Notice regarding dual-effect */}
-          <div className="flex items-start p-3 bg-amber-50/80 border border-amber-200/80 rounded-lg text-xs text-amber-900">
-            <AlertCircle className="w-4 h-4 text-amber-600 mr-2 shrink-0 mt-0.5" />
+          {/* Connected Ledgers Notice */}
+          <div className="flex items-start p-2.5 bg-sky-50/80 border border-sky-200/80 rounded-lg text-xs text-sky-950">
+            <Building2 className="w-4 h-4 text-sky-600 mr-2 shrink-0 mt-0.5" />
             <span>
-              This company invoice increases the <strong>Party's Amount Due</strong> and increases your <strong>Amount Payable to Login Smart Technology</strong>.
+              This single invoice automatically updates both the <strong>Party Ledger</strong> and the <strong>Company Ledger</strong>.
             </span>
           </div>
 
+          {/* Company Selector */}
+          {companies.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Company / Supplier <span className="text-red-500">*</span>
+              </label>
+              {defaultCompanyId && selectedCompanyObj && !editingInvoice ? (
+                <div className="flex items-center space-x-2 p-2 bg-slate-100 rounded-lg border border-slate-200">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-bold text-slate-800">{selectedCompanyObj.name}</span>
+                </div>
+              ) : (
+                <select
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                >
+                  <option value="">Select Company...</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Party Selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Select Party / Shop <span className="text-red-500">*</span>
+              Select Party / Customer <span className="text-red-500">*</span>
             </label>
-            <select
-              value={partyId}
-              onChange={(e) => setPartyId(e.target.value)}
-              disabled={!!editingInvoice || (!!defaultPartyId && parties.length > 0)}
-              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 disabled:opacity-75 disabled:bg-slate-100"
-            >
-              {parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} {p.phone ? `(${p.phone})` : ''}
-                </option>
-              ))}
-            </select>
+            {defaultPartyId && selectedPartyObj && !editingInvoice ? (
+              <div className="flex items-center space-x-2 p-2 bg-slate-100 rounded-lg border border-slate-200">
+                <User className="w-4 h-4 text-sky-600" />
+                <span className="text-xs font-bold text-slate-800">{selectedPartyObj.name}</span>
+              </div>
+            ) : (
+              <select
+                value={partyId}
+                onChange={(e) => setPartyId(e.target.value)}
+                disabled={!!editingInvoice || (!!defaultPartyId && parties.length > 0)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 disabled:opacity-75 disabled:bg-slate-100"
+              >
+                <option value="">Select Party / Customer...</option>
+                {parties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.phone ? `(${p.phone})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -159,9 +225,9 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
                   type="text"
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
-                  placeholder="e.g. A-1025"
+                  placeholder="e.g. INV-001"
                   required
-                  className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 uppercase font-mono font-medium"
+                  className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 uppercase font-mono font-medium"
                 />
               </div>
             </div>
@@ -179,7 +245,7 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   required
-                  className="w-full pl-8 pr-2 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 font-mono"
                 />
               </div>
             </div>
@@ -199,9 +265,9 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
                 step="1"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 30000"
+                placeholder="e.g. 50000"
                 required
-                className="w-full pl-9 pr-3 py-2.5 text-base font-semibold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                className="w-full pl-9 pr-3 py-2 text-sm font-semibold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 font-mono"
               />
             </div>
             {Number(amount) > 0 && (
@@ -219,8 +285,8 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. 10x Product Boxes, 5x Cartons"
-              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+              placeholder="e.g. 10x Cartons / Products"
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
             />
           </div>
 
@@ -228,14 +294,14 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 px-4 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition active:bg-slate-300"
+              className="flex-1 py-2 px-4 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition active:bg-slate-300"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 px-4 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 active:bg-sky-800 rounded-lg shadow-xs transition disabled:opacity-50"
+              className="flex-1 py-2 px-4 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 active:bg-sky-800 rounded-lg shadow-xs transition disabled:opacity-50"
             >
               {loading ? 'Saving...' : editingInvoice ? 'Save Changes' : 'Record Invoice'}
             </button>
