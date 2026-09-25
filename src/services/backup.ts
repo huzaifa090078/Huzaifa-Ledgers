@@ -12,7 +12,7 @@ import type {
   AppSettings,
   DailyReconciliation,
 } from '../types';
-import { getTodayDateString } from './accounting';
+import { getTodayDateString, formatDateDisplay } from './accounting';
 
 export const FOLDER_SMART_TECH = 'Smart Technology';
 export const FOLDER_BACKUP = 'Smart Technology/Backup';
@@ -616,7 +616,7 @@ export async function exportBackupFile(): Promise<{ filename: string; count: num
     payload.dailyReconciliations.length;
 
   const jsonStr = JSON.stringify(payload, null, 2);
-  const filename = `SmartTech_Ledger_Backup_${getTodayDateString()}.json`;
+  const filename = `SmartTech_Ledger_Backup_${formatDateDisplay(getTodayDateString())}.json`;
 
   if (Capacitor.isNativePlatform()) {
     let fileUri = '';

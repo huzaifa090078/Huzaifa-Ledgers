@@ -476,7 +476,7 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       const collection = calculateDailyCollection(partyPayments, '2026-09-21');
       const pdfResult = generateDailyCollectionPDF(collection, 'Test Salesman');
 
-      expect(pdfResult.filename).toBe('Daily_Collection_2026-09-21.pdf');
+      expect(pdfResult.filename).toBe('Daily_Collection_21-09-2026.pdf');
       expect(pdfResult.pdfBlob.size).toBeGreaterThan(1000);
 
       // Inspect the raw text of the generated PDF
@@ -653,13 +653,13 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
         '2026-09-15'
       );
 
-      expect(result.filename).toBe('Ledger_Modern_Electronics_2026-09-10_to_2026-09-15.pdf');
+      expect(result.filename).toBe('Ledger_Modern_Electronics_10-09-2026_to_15-09-2026.pdf');
       expect(result.pdfBlob.size).toBeGreaterThan(1000);
 
       const pdfText = await result.pdfBlob.text();
       expect(pdfText).toContain('Opening Balance');
       expect(pdfText).toContain('Closing Balance');
-      expect(pdfText).toContain('10/09/2026 to 15/09/2026');
+      expect(pdfText).toContain('10-09-2026 to 15-09-2026');
     });
 
     it('builds short, plain-text WhatsApp message with exact 4 fields: Party, Last Balance, Recent Payment, Pending Balance', async () => {
@@ -1023,14 +1023,14 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
         '2026-09-15'
       );
 
-      expect(result.filename).toBe('CompanyLedger_Login_Smart_Technology_2026-09-10_to_2026-09-15.pdf');
+      expect(result.filename).toBe('CompanyLedger_Login_Smart_Technology_10-09-2026_to_15-09-2026.pdf');
       expect(result.pdfBlob.size).toBeGreaterThan(1000);
 
       const pdfText = await result.pdfBlob.text();
       expect(pdfText).toContain('Opening Balance');
       expect(pdfText).toContain('Closing Balance');
       expect(pdfText).toContain('Login Smart Technology');
-      expect(pdfText).toContain('10/09/2026 to 15/09/2026');
+      expect(pdfText).toContain('10-09-2026 to 15-09-2026');
     });
 
     it('validates backup payload with companies and companyInvoices and provides backward compatibility for older backups', async () => {
@@ -1070,6 +1070,36 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       // Automatically defaults missing tables to empty arrays so old backups restore seamlessly
       expect(validLegacy.normalized?.companies).toEqual([]);
       expect(validLegacy.normalized?.companyInvoices).toEqual([]);
+    });
+
+    it('formats all dates strictly in DD-MM-YYYY standard with 2-digit padding', async () => {
+      const { formatDateDisplay, formatDate } = await import('../src/services/accounting');
+
+      // Standard YYYY-MM-DD
+      expect(formatDateDisplay('2026-09-24')).toBe('24-09-2026');
+      expect(formatDateDisplay('2027-01-05')).toBe('05-01-2027');
+      expect(formatDateDisplay('2026-12-31')).toBe('31-12-2026');
+
+      // Single-digit month/day with padding
+      expect(formatDateDisplay('2026-9-5')).toBe('05-09-2026');
+      expect(formatDateDisplay('2026-09-5')).toBe('05-09-2026');
+      expect(formatDateDisplay('2026-9-05')).toBe('05-09-2026');
+
+      // ISO Timestamp strings
+      expect(formatDateDisplay('2026-09-24T10:30:00.000Z')).toBe('24-09-2026');
+      expect(formatDateDisplay('2027-01-05T00:00:00Z')).toBe('05-01-2027');
+
+      // Slash formatted dates converted to hyphens
+      expect(formatDateDisplay('24/09/2026')).toBe('24-09-2026');
+      expect(formatDateDisplay('5/1/2027')).toBe('05-01-2027');
+
+      // Date objects
+      const d = new Date(2026, 8, 24); // Sep 24, 2026
+      expect(formatDateDisplay(d)).toBe('24-09-2026');
+
+      // formatDate alias behaves identically
+      expect(formatDate('2026-09-24')).toBe('24-09-2026');
+      expect(formatDate('2027-01-05')).toBe('05-01-2027');
     });
   });
 });

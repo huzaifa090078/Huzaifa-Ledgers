@@ -39,17 +39,69 @@ export function formatAmountOnly(amount: number): string {
 }
 
 /**
- * Converts YYYY-MM-DD or ISO date string to DD-MM-YYYY for display
+ * Global Central Date Formatter:
+ * Converts YYYY-MM-DD, ISO string, Date object, or timestamp to standard DD-MM-YYYY display format.
+ * Always ensures 2-digit day, 2-digit month, and 4-digit year with hyphens: e.g. '24-09-2026', '05-01-2027'.
  */
-export function formatDateDisplay(dateStr?: string): string {
-  if (!dateStr) return '';
-  const parts = dateStr.split('T')[0].split('-');
-  if (parts.length === 3) {
-    const [year, month, day] = parts;
+export function formatDateDisplay(dateInput?: string | Date | null): string {
+  if (!dateInput) return '';
+
+  if (dateInput instanceof Date) {
+    if (isNaN(dateInput.getTime())) return '';
+    const day = String(dateInput.getDate()).padStart(2, '0');
+    const month = String(dateInput.getMonth() + 1).padStart(2, '0');
+    const year = String(dateInput.getFullYear());
     return `${day}-${month}-${year}`;
   }
+
+  const dateStr = String(dateInput).trim();
+  if (!dateStr) return '';
+
+  // Extract clean date portion if ISO string (e.g. 2026-09-24T12:00:00Z -> 2026-09-24)
+  const clean = dateStr.split('T')[0].split(' ')[0];
+
+  // If already DD-MM-YYYY
+  if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
+    return clean;
+  }
+
+  // If YYYY-MM-DD or YYYY-M-D
+  const ymdMatch = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymdMatch) {
+    const [, year, month, day] = ymdMatch;
+    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+  }
+
+  // If DD-MM-YYYY with single digits e.g. D-M-YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmyMatch) {
+    const [, day, month, year] = dmyMatch;
+    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+  }
+
+  // If DD/MM/YYYY or YYYY/MM/DD with slashes
+  const slashMatch = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+  }
+
+  // Fallback for standard date parsing
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear());
+    return `${day}-${month}-${year}`;
+  }
+
   return dateStr;
 }
+
+/**
+ * Reusable global formatDate alias
+ */
+export const formatDate = formatDateDisplay;
 
 /**
  * Format ISO-8601 UTC timestamp to Pakistan Local Date & Time (Asia/Karachi, UTC+05:00)

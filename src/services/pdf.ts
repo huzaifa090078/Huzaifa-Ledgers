@@ -47,10 +47,10 @@ export function generatePartyLedgerPDF(
   const isDateRange = periodLedger.isDateRange;
   const filteredEntries = periodLedger.entries;
 
-  // Helper to format date with slashes e.g. 09/09/2026
+  // Helper to format date in standard DD-MM-YYYY format
   const formatPeriodDate = (dateStr?: string): string => {
     if (!dateStr) return '';
-    return formatDateDisplay(dateStr).replace(/-/g, '/');
+    return formatDateDisplay(dateStr);
   };
 
   // Determine starting and ending dates from filters or transactions
@@ -293,8 +293,8 @@ export function generatePartyLedgerPDF(
 
   const safePartyName = party.name.replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = startDate && endDate
-    ? `Ledger_${safePartyName}_${startDate}_to_${endDate}.pdf`
-    : `Ledger_${safePartyName}_${getTodayDateString()}.pdf`;
+    ? `Ledger_${safePartyName}_${formatDateDisplay(startDate)}_to_${formatDateDisplay(endDate)}.pdf`
+    : `Ledger_${safePartyName}_${formatDateDisplay(getTodayDateString())}.pdf`;
 
   const pdfBlob = doc.output('blob');
   return { pdfBlob, filename };
@@ -520,9 +520,10 @@ export function generateCompanyLedgerPDF(
   const isDateRange = periodLedger.isDateRange;
   const filteredEntries = periodLedger.entries;
 
+  // Helper to format date in standard DD-MM-YYYY format
   const formatPeriodDate = (dateStr?: string): string => {
     if (!dateStr) return '';
-    return formatDateDisplay(dateStr).replace(/-/g, '/');
+    return formatDateDisplay(dateStr);
   };
 
   const effectiveStartDate =
@@ -756,8 +757,8 @@ export function generateCompanyLedgerPDF(
 
   const safeCompanyName = company.name.replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = startDate && endDate
-    ? `CompanyLedger_${safeCompanyName}_${startDate}_to_${endDate}.pdf`
-    : `CompanyLedger_${safeCompanyName}_${getTodayDateString()}.pdf`;
+    ? `CompanyLedger_${safeCompanyName}_${formatDateDisplay(startDate)}_to_${formatDateDisplay(endDate)}.pdf`
+    : `CompanyLedger_${safeCompanyName}_${formatDateDisplay(getTodayDateString())}.pdf`;
 
   const pdfBlob = doc.output('blob');
   return { pdfBlob, filename };
@@ -965,7 +966,7 @@ export function generateDailyCollectionPDF(
     );
   }
 
-  const filename = `Daily_Collection_${collection.date}.pdf`;
+  const filename = `Daily_Collection_${formatDateDisplay(collection.date)}.pdf`;
   const pdfBlob = doc.output('blob');
   return { pdfBlob, filename };
 }
