@@ -17,7 +17,7 @@ import {
   ArrowUpRight,
   Clock,
 } from 'lucide-react';
-import type { Company, PartyInvoice, CompanyInvoice, PartyPayment, CompanyPayment } from '../types';
+import type { Company, PartyInvoice, CompanyInvoice, CompanyPayment } from '../types';
 import {
   calculateSingleCompanyBalance,
   calculateCompanyPeriodLedger,
@@ -40,20 +40,20 @@ const getFirstDayOfMonth = () => {
 interface CompanyDetailProps {
   company: Company;
   invoices: (PartyInvoice | CompanyInvoice)[];
-  partyPayments: (PartyPayment | CompanyPayment)[];
+  companyPayments: CompanyPayment[];
   onBack: () => void;
   onOpenAddInvoice: (companyId: string) => void;
   onOpenRecordPayment: (companyId: string) => void;
   onEditInvoice: (invoice: PartyInvoice | CompanyInvoice) => void;
   onDeleteInvoice: (invoice: PartyInvoice | CompanyInvoice) => void;
-  onEditPayment: (payment: PartyPayment | CompanyPayment) => void;
-  onDeletePayment: (payment: PartyPayment | CompanyPayment) => void;
+  onEditPayment: (payment: CompanyPayment) => void;
+  onDeletePayment: (payment: CompanyPayment) => void;
 }
 
 export const CompanyDetail: React.FC<CompanyDetailProps> = ({
   company,
   invoices,
-  partyPayments,
+  companyPayments,
   onBack,
   onOpenAddInvoice,
   onOpenRecordPayment,
@@ -92,17 +92,17 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
   }, [invoices, company.id]);
 
   const companyPaymentsList = useMemo(() => {
-    return partyPayments
+    return companyPayments
       .filter((pmt) => pmt.companyId === company.id)
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [partyPayments, company.id]);
+  }, [companyPayments, company.id]);
 
   // Chronological accounting ledger timeline with running balance
   const timeline = useMemo(() => {
-    return getCompanyLedgerTimeline(company.id, invoices, partyPayments);
-  }, [company.id, invoices, partyPayments]);
+    return getCompanyLedgerTimeline(company.id, invoices, companyPayments);
+  }, [company.id, invoices, companyPayments]);
 
-  const balanceInfo = calculateSingleCompanyBalance(company.id, invoices, partyPayments);
+  const balanceInfo = calculateSingleCompanyBalance(company.id, invoices, companyPayments);
 
   const handleExportPDF = async (
     destination: 'mobile' | 'whatsapp',
@@ -115,7 +115,7 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
       const res = await exportCompanyLedgerPDF(
         company,
         invoices,
-        partyPayments,
+        companyPayments,
         destination,
         undefined,
         customStart,
@@ -142,7 +142,7 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
     setSharing(true);
     setShareFeedback(null);
     try {
-      const res = await shareCompanyLedger(company, invoices, partyPayments);
+      const res = await shareCompanyLedger(company, invoices, companyPayments);
       setShareFeedback(res.message);
       setTimeout(() => setShareFeedback(null), 4000);
     } catch (err: any) {
@@ -156,7 +156,7 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
   const isRange = exportMode === 'range';
   const isDateRangeInvalid = isRange && startDate > endDate;
   const periodData = isRange
-    ? calculateCompanyPeriodLedger(company.id, invoices, partyPayments, startDate, endDate)
+    ? calculateCompanyPeriodLedger(company.id, invoices, companyPayments, startDate, endDate)
     : null;
 
   return (
@@ -633,7 +633,6 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
                 </div>
               ) : (
                 companyPaymentsList.map((pmt) => {
-                  const partyDisplayName = (pmt as any).partyName || 'Customer / Party';
                   const method = pmt.paymentMethod || 'Cash';
                   return (
                     <div
@@ -644,11 +643,13 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center space-x-1.5 flex-wrap">
                             <span className="text-xs font-bold text-slate-900">
-                              {partyDisplayName}
+                              Payment ({method})
                             </span>
-                            <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                              {method}
-                            </span>
+                            {pmt.reference && (
+                              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md">
+                                Ref: {pmt.reference}
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex items-center space-x-2 mt-1 text-[11px] text-slate-500 font-mono">

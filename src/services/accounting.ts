@@ -296,8 +296,6 @@ export function getPartyLedgerTimeline(
         debit: 0,
         credit,
         balance: runningBalance,
-        companyId: pmt.companyId,
-        companyName: pmt.companyName,
         paymentMethod: pmt.paymentMethod,
         rawItem: pmt,
       };
@@ -422,7 +420,11 @@ export function calculateSingleCompanyBalance(
   allPayments: (PartyPayment | CompanyPayment)[]
 ): IndividualCompanyBalanceSummary {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
-  const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
+  // Strict Rule: Party Payments belong ONLY to parties and must NEVER affect Company balance.
+  // Only genuine CompanyPayment records (which do not have a partyId) reduce company balance.
+  const companyPayments = allPayments.filter(
+    (pmt) => pmt.companyId === companyId && !('partyId' in pmt && (pmt as any).partyId)
+  );
 
   const totalInvoices = companyInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const totalPayments = companyPayments.reduce((sum, pmt) => sum + (Number(pmt.amount) || 0), 0);
@@ -462,11 +464,14 @@ export function getCompanyLedgerTimeline(
   allPayments: (PartyPayment | CompanyPayment)[]
 ): { entries: CompanyLedgerEntry[]; finalBalance: number; totalDebit: number; totalCredit: number } {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
-  const companyPayments = allPayments.filter((pmt) => pmt.companyId === companyId);
+  // Strict Rule: Party Payments belong ONLY to parties and must NEVER appear in Company Ledger.
+  const companyPayments = allPayments.filter(
+    (pmt) => pmt.companyId === companyId && !('partyId' in pmt && (pmt as any).partyId)
+  );
 
   type RawCompanyItem =
     | { kind: 'inv'; data: PartyInvoice | CompanyInvoice; date: string; time: string }
-    | { kind: 'pmt'; data: PartyPayment | CompanyPayment; date: string; time: string };
+    | { kind: 'pmt'; data: CompanyPayment; date: string; time: string };
 
   const rawList: RawCompanyItem[] = [
     ...companyInvoices.map((inv) => ({
@@ -477,7 +482,7 @@ export function getCompanyLedgerTimeline(
     })),
     ...companyPayments.map((pmt) => ({
       kind: 'pmt' as const,
-      data: pmt,
+      data: pmt as CompanyPayment,
       date: pmt.date,
       time: pmt.createdAt || pmt.date,
     })),
@@ -525,20 +530,14 @@ export function getCompanyLedgerTimeline(
       const credit = Number(pmt.amount) || 0;
       totalCredit += credit;
       runningBalance -= credit;
-      const partyName = (pmt as PartyPayment).partyName || (pmt as CompanyPayment).partyName;
-      const partyId = (pmt as PartyPayment).partyId || (pmt as CompanyPayment).partyId;
       return {
         id: pmt.id,
         date: pmt.date,
         type: 'payment',
-        description: partyName
-          ? `Payment • ${partyName} - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`
-          : `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
+        description: `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
         debit: 0,
         credit,
         balance: runningBalance,
-        partyId,
-        partyName,
         companyId: pmt.companyId,
         companyName: pmt.companyName,
         paymentMethod: pmt.paymentMethod,
@@ -672,7 +671,7 @@ export function calculateAnalytics(
   customStart?: string,
   customEnd?: string,
   companies?: Company[],
-  companyInvoices?: CompanyInvoice[]
+  companyInvoices?: (PartyInvoice | CompanyInvoice)[]
 ): AnalyticsSummary {
   const todayStr = getTodayDateString();
 
@@ -688,7 +687,17 @@ export function calculateAnalytics(
   );
 
   const hasUniversalCompanies = Boolean(companies && companies.length > 0);
-  const filteredCompanyInvoices = (companyInvoices || []).filter((ci) =>
+
+  // Master invoices: in the unified single master record architecture,
+  // company invoices are in `invoices`. If `companyInvoices` has separate items, include them without duplicate IDs.
+  let masterCompanyInvoices: (PartyInvoice | CompanyInvoice)[] = invoices;
+  if (companyInvoices && companyInvoices.length > 0) {
+    const seenIds = new Set(invoices.map((i) => i.id));
+    const extraCompanyInvoices = companyInvoices.filter((ci) => !seenIds.has(ci.id));
+    masterCompanyInvoices = [...invoices, ...extraCompanyInvoices];
+  }
+
+  const filteredCompanyInvoices = masterCompanyInvoices.filter((ci) =>
     isDateInFilter(ci.date, period, customStart, customEnd)
   );
 
@@ -711,7 +720,7 @@ export function calculateAnalytics(
 
   // Company balances: if universal companies provided, calculate from them; otherwise fallback to legacy formula
   const totalCompanyLiability = hasUniversalCompanies
-    ? (period === 'all' ? (companyInvoices || []) : filteredCompanyInvoices).reduce(
+    ? (period === 'all' ? masterCompanyInvoices : filteredCompanyInvoices).reduce(
         (sum, ci) => sum + (Number(ci.amount) || 0),
         0
       )
@@ -729,7 +738,7 @@ export function calculateAnalytics(
   if (hasUniversalCompanies && companies) {
     companyOutstanding = companies.reduce(
       (sum, comp) =>
-        sum + calculateSingleCompanyBalance(comp.id, companyInvoices || [], companyPayments).currentBalance,
+        sum + calculateSingleCompanyBalance(comp.id, masterCompanyInvoices, companyPayments).currentBalance,
       0
     );
   } else {
@@ -777,7 +786,7 @@ export function getRecentTransactions(
   partyPayments: PartyPayment[],
   companyPayments: CompanyPayment[],
   limit = 20,
-  companyInvoices?: CompanyInvoice[]
+  companyInvoices?: (PartyInvoice | CompanyInvoice)[]
 ): RecentTransactionItem[] {
   const items: RecentTransactionItem[] = [];
 
@@ -821,17 +830,20 @@ export function getRecentTransactions(
   }
 
   if (companyInvoices) {
+    const seenInvoiceIds = new Set(invoices.map((i) => i.id));
     for (const cinv of companyInvoices) {
-      items.push({
-        id: `cinv-${cinv.id}`,
-        date: cinv.date,
-        timestamp: cinv.createdAt || cinv.date,
-        title: cinv.companyName || 'Company Purchase',
-        subtitle: `Purchase #${cinv.invoiceNumber}${cinv.description ? ` • ${cinv.description}` : ''}`,
-        amount: cinv.amount,
-        type: 'company_invoice',
-        direction: 'liability',
-      });
+      if (!seenInvoiceIds.has(cinv.id)) {
+        items.push({
+          id: `cinv-${cinv.id}`,
+          date: cinv.date,
+          timestamp: cinv.createdAt || cinv.date,
+          title: cinv.companyName || 'Company Purchase',
+          subtitle: `Purchase #${cinv.invoiceNumber}${cinv.description ? ` • ${cinv.description}` : ''}`,
+          amount: cinv.amount,
+          type: 'company_invoice',
+          direction: 'liability',
+        });
+      }
     }
   }
 

@@ -9,6 +9,7 @@ import {
   calculateAnalytics,
   formatPKR,
   getPartyLedgerTimeline,
+  getRecentTransactions,
   formatLocalTimestamp,
   formatLocalTime,
   checkCompanyInvoiceUniqueness,
@@ -1119,9 +1120,10 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       const partyA: Party = { id: 'party-A', name: 'Party A', phone: '03001234567', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
       const partyB: Party = { id: 'party-B', name: 'Party B', phone: '03007654321', createdAt: '2026-09-24T10:00:00Z', updatedAt: '2026-09-24T10:00:00Z' };
 
-      // Single master list of invoices and payments (as in Dexie db.invoices and db.partyPayments)
+      // Single master list of invoices and payments (as in Dexie db.invoices, db.partyPayments, db.companyPayments)
       const allInvoices: PartyInvoice[] = [];
       const allPayments: PartyPayment[] = [];
+      const companyPayments: CompanyPayment[] = [];
 
       // 2. Step 1: Create Invoice 1: Company A, Party A, INV-001, Rs 50,000
       const inv1: PartyInvoice = {
@@ -1146,21 +1148,17 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(partyATimeline1.finalBalance).toBe(50000);
 
       // Verify Company A Ledger
-      const compATimeline1 = getCompanyLedgerTimeline(compA.id, allInvoices, allPayments);
+      const compATimeline1 = getCompanyLedgerTimeline(compA.id, allInvoices, companyPayments);
       expect(compATimeline1.entries).toHaveLength(1);
       expect(compATimeline1.entries[0].partyName).toBe('Party A');
       expect(compATimeline1.entries[0].invoiceNumber).toBe('INV-001');
       expect(compATimeline1.finalBalance).toBe(50000);
 
-      // 3. Step 2: Record Payment: Party A, Company A, Rs 10,000 Cash
+      // 3. Step 2: Record Party Payment: Party A, Rs 10,000 Cash
       const pmt1: PartyPayment = {
         id: 'pmt-1',
         partyId: partyA.id,
         partyName: partyA.name,
-        companyId: compA.id,
-        companyName: compA.name,
-        invoiceId: inv1.id,
-        invoiceNumber: inv1.invoiceNumber,
         date: '2026-09-25',
         amount: 10000,
         paymentMethod: 'Cash',
@@ -1169,13 +1167,32 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       };
       allPayments.push(pmt1);
 
-      // Verify Party A Ledger Balance
+      // Verify Party A Ledger Balance reduces: 50,000 - 10,000 = 40,000
       const partyABalance2 = calculatePartyBalance(partyA.id, allInvoices, allPayments);
       expect(partyABalance2.currentBalance).toBe(40000);
 
-      // Verify Company A Ledger Balance
-      const compABalance2 = calculateSingleCompanyBalance(compA.id, allInvoices, allPayments);
-      expect(compABalance2.currentBalance).toBe(40000);
+      // Verify Company A Ledger Balance remains UNCHANGED at 50,000 (Party payment does not affect Company!)
+      const compABalance2 = calculateSingleCompanyBalance(compA.id, allInvoices, companyPayments);
+      expect(compABalance2.currentBalance).toBe(50000);
+
+      // Step 2b: Record Company Payment to Company A: Rs 10,000 Bank
+      const cpmt1: CompanyPayment = {
+        id: 'cpmt-1',
+        companyId: compA.id,
+        companyName: compA.name,
+        date: '2026-09-25',
+        amount: 10000,
+        paymentMethod: 'Bank',
+        reference: 'DEP-101',
+        createdAt: '2026-09-25T11:30:00Z',
+        updatedAt: '2026-09-25T11:30:00Z',
+      };
+      companyPayments.push(cpmt1);
+
+      // Verify Company A balance reduces: 50,000 - 10,000 = 40,000
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, companyPayments).currentBalance).toBe(40000);
+      // Verify Party A balance remains 40,000 (Company payment does not affect Party!)
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(40000);
 
       // 4. Step 3: Create Invoice 2: Company B, Party A, INV-002, Rs 30,000
       const inv2: PartyInvoice = {
@@ -1194,26 +1211,25 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
 
       // Party A Ledger contains invoices from BOTH companies
       const partyATimeline3 = getPartyLedgerTimeline(partyA.id, allInvoices, allPayments);
-      expect(partyATimeline3.entries).toHaveLength(3); // INV-001 (Comp A), Payment (Comp A), INV-002 (Comp B)
-      expect(partyATimeline3.entries.map((e) => e.companyName)).toEqual(['Company A', 'Company A', 'Company B']);
+      expect(partyATimeline3.entries).toHaveLength(3); // INV-001 (Comp A), Payment, INV-002 (Comp B)
+      expect(partyATimeline3.entries[0].companyName).toBe('Company A');
+      expect(partyATimeline3.entries[2].companyName).toBe('Company B');
       expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(70000);
 
       // Company A Ledger ONLY contains Company A transactions
-      const compATimeline3 = getCompanyLedgerTimeline(compA.id, allInvoices, allPayments);
-      expect(compATimeline3.entries).toHaveLength(2);
+      const compATimeline3 = getCompanyLedgerTimeline(compA.id, allInvoices, companyPayments);
+      expect(compATimeline3.entries).toHaveLength(2); // inv1, cpmt1
       expect(compATimeline3.finalBalance).toBe(40000);
 
       // Company B Ledger ONLY contains Company B transactions
-      const compBTimeline3 = getCompanyLedgerTimeline(compB.id, allInvoices, allPayments);
+      const compBTimeline3 = getCompanyLedgerTimeline(compB.id, allInvoices, companyPayments);
       expect(compBTimeline3.entries).toHaveLength(1);
       expect(compBTimeline3.entries[0].invoiceNumber).toBe('INV-002');
       expect(compBTimeline3.finalBalance).toBe(30000);
 
-      // 5. Step 4: Add Payment against Company B: Party A, Company B, Rs 10,000 Cash
-      const pmt2: PartyPayment = {
-        id: 'pmt-2',
-        partyId: partyA.id,
-        partyName: partyA.name,
+      // 5. Step 4: Add Payment to Company B: Rs 10,000
+      const cpmt2: CompanyPayment = {
+        id: 'cpmt-2',
         companyId: compB.id,
         companyName: compB.name,
         date: '2026-09-27',
@@ -1222,20 +1238,21 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
         createdAt: '2026-09-27T12:00:00Z',
         updatedAt: '2026-09-27T12:00:00Z',
       };
-      allPayments.push(pmt2);
-
-      // Party A balance changes: 70,000 - 10,000 = 60,000
-      expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(60000);
+      companyPayments.push(cpmt2);
 
       // Company B balance changes: 30,000 - 10,000 = 20,000
-      expect(calculateSingleCompanyBalance(compB.id, allInvoices, allPayments).currentBalance).toBe(20000);
+      expect(calculateSingleCompanyBalance(compB.id, allInvoices, companyPayments).currentBalance).toBe(20000);
 
       // Company A balance does NOT change: remains 40,000
-      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allPayments).currentBalance).toBe(40000);
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, companyPayments).currentBalance).toBe(40000);
 
-      // 6. Verify exactly 2 master invoice records and 2 master payment records in database
+      // Party A balance does NOT change: remains 70,000
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPayments).currentBalance).toBe(70000);
+
+      // 6. Verify master records
       expect(allInvoices).toHaveLength(2);
-      expect(allPayments).toHaveLength(2);
+      expect(allPayments).toHaveLength(1);
+      expect(companyPayments).toHaveLength(2);
     });
   });
 
@@ -1500,11 +1517,9 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(party1Timeline.totalDebit).toBe(100000); // 40k + 60k
       expect(party1Timeline.totalCredit).toBe(35000); // 15k + 20k
       expect(party1Timeline.finalBalance).toBe(65000);
-      // Badges show multiple companies
-      expect(party1Timeline.entries.map((e) => e.companyName)).toEqual([
+      // Invoices show multiple companies, party payments have no company association
+      expect(party1Timeline.entries.filter((e) => e.type === 'invoice').map((e) => e.companyName)).toEqual([
         'Alpha Traders',
-        'Alpha Traders',
-        'Beta Suppliers',
         'Beta Suppliers',
       ]);
 
@@ -1515,27 +1530,40 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(party1Payments).toHaveLength(2);
 
       // --- COMPANY 2 (Beta Suppliers) VERIFICATION ---
+      const comp2CompanyPayments: CompanyPayment[] = [
+        {
+          id: 'cp-1',
+          companyId: comp2.id,
+          companyName: comp2.name,
+          date: '2026-09-27',
+          amount: 20000,
+          paymentMethod: 'Bank',
+          createdAt: '2026-09-27T12:00:00Z',
+          updatedAt: '2026-09-27T12:00:00Z',
+        },
+      ];
+
       // A. Company 2 View Ledger (Chronological running balance)
-      const comp2Timeline = getCompanyLedgerTimeline(comp2.id, allInvoices, allPayments);
-      expect(comp2Timeline.entries).toHaveLength(3); // inv-2 (p1), inv-3 (p2), pmt-2 (p1)
+      const comp2Timeline = getCompanyLedgerTimeline(comp2.id, allInvoices, comp2CompanyPayments);
+      expect(comp2Timeline.entries).toHaveLength(3); // inv-2 (p1), inv-3 (p2), cp-1
       expect(comp2Timeline.totalDebit).toBe(90000); // 60k + 30k
       expect(comp2Timeline.totalCredit).toBe(20000); // 20k
       expect(comp2Timeline.finalBalance).toBe(70000);
-      expect(comp2Timeline.entries.map((e) => e.partyName)).toEqual([
+      expect(comp2Timeline.entries.filter((e) => e.type === 'invoice').map((e) => e.partyName)).toEqual([
         'Customer One',
         'Customer Two',
-        'Customer One',
       ]);
 
       // B. Company 2 Transactions (Invoices list & Payments list)
       const comp2Invoices = allInvoices.filter((i) => i.companyId === comp2.id);
-      const comp2Payments = allPayments.filter((p) => p.companyId === comp2.id);
+      const comp2Payments = comp2CompanyPayments.filter((p) => p.companyId === comp2.id);
       expect(comp2Invoices).toHaveLength(2);
       expect(comp2Payments).toHaveLength(1);
 
       // Verify no duplicate master records
       expect(allInvoices).toHaveLength(3);
       expect(allPayments).toHaveLength(2);
+      expect(comp2CompanyPayments).toHaveLength(1);
     });
   });
 
@@ -1664,6 +1692,351 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
         expect(inv.companyId).toBe(companyId);
         expect(inv.companyName).toBe('Hassan Traders Login');
       });
+    });
+  });
+
+  describe('Final Payment Relationship Architecture Acceptance Tests', () => {
+    it('executes the exact user verification scenario with separated relationships', () => {
+      const compA: Company = { id: 'comp-a', name: 'Company A', createdAt: '', updatedAt: '' };
+      const partyA: Party = { id: 'party-a', name: 'Party A', createdAt: '', updatedAt: '' };
+      const partyB: Party = { id: 'party-b', name: 'Party B', createdAt: '', updatedAt: '' };
+      const partyC: Party = { id: 'party-c', name: 'Party C', createdAt: '', updatedAt: '' };
+
+      const allInvoices: PartyInvoice[] = [];
+      const allPartyPayments: PartyPayment[] = [];
+      const allCompanyPayments: CompanyPayment[] = [];
+
+      // 1. Create Company A + Party A invoice: Company A + Party A = Rs.1,000
+      allInvoices.push({
+        id: 'inv-100',
+        invoiceNumber: '100',
+        companyId: compA.id,
+        companyName: compA.name,
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-26',
+        amount: 1000,
+        createdAt: '2026-09-26T10:00:00Z',
+        updatedAt: '2026-09-26T10:00:00Z',
+      });
+
+      // Verify invoice has BOTH relationships
+      expect(allInvoices[0].companyId).toBe('comp-a');
+      expect(allInvoices[0].partyId).toBe('party-a');
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPartyPayments).currentBalance).toBe(1000);
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allCompanyPayments).currentBalance).toBe(1000);
+
+      // 2. Record Party A payment: Party A Payment = Rs.100
+      allPartyPayments.push({
+        id: 'pmt-a',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-26',
+        amount: 100,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-26T11:00:00Z',
+        updatedAt: '2026-09-26T11:00:00Z',
+      });
+
+      // Expected: Party A remaining balance = Rs.900, Company A remaining balance = Rs.1,000
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPartyPayments).currentBalance).toBe(900);
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allCompanyPayments).currentBalance).toBe(1000);
+
+      // 3. Record Party B payment: Party B Payment = Rs.100
+      allPartyPayments.push({
+        id: 'pmt-b',
+        partyId: partyB.id,
+        partyName: partyB.name,
+        date: '2026-09-26',
+        amount: 100,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-26T12:00:00Z',
+        updatedAt: '2026-09-26T12:00:00Z',
+      });
+
+      // Expected: Party B balance changes according to its own transactions, Company A balance remains unchanged
+      expect(calculatePartyBalance(partyB.id, allInvoices, allPartyPayments).isAdvance).toBe(true);
+      expect(calculatePartyBalance(partyB.id, allInvoices, allPartyPayments).advanceAmount).toBe(100);
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allCompanyPayments).currentBalance).toBe(1000);
+
+      // 4. Record Party C payment: Party C Payment = Rs.100
+      allPartyPayments.push({
+        id: 'pmt-c',
+        partyId: partyC.id,
+        partyName: partyC.name,
+        date: '2026-09-26',
+        amount: 100,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-26T13:00:00Z',
+        updatedAt: '2026-09-26T13:00:00Z',
+      });
+
+      // Expected: Party C balance changes according to its own transactions, Company A balance remains unchanged
+      expect(calculatePartyBalance(partyC.id, allInvoices, allPartyPayments).isAdvance).toBe(true);
+      expect(calculatePartyBalance(partyC.id, allInvoices, allPartyPayments).advanceAmount).toBe(100);
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allCompanyPayments).currentBalance).toBe(1000);
+
+      // 5. Manually record: Company A Payment = Rs.300
+      allCompanyPayments.push({
+        id: 'cpmt-a',
+        companyId: compA.id,
+        companyName: compA.name,
+        date: '2026-09-26',
+        amount: 300,
+        paymentMethod: 'Bank',
+        reference: 'REC-300',
+        createdAt: '2026-09-26T14:00:00Z',
+        updatedAt: '2026-09-26T14:00:00Z',
+      });
+
+      // Expected: Company A remaining balance = Rs.700, No Party balance changes, No Party Payment records are created or modified
+      expect(calculateSingleCompanyBalance(compA.id, allInvoices, allCompanyPayments).currentBalance).toBe(700);
+      expect(calculatePartyBalance(partyA.id, allInvoices, allPartyPayments).currentBalance).toBe(900);
+      expect(calculatePartyBalance(partyB.id, allInvoices, allPartyPayments).advanceAmount).toBe(100);
+      expect(calculatePartyBalance(partyC.id, allInvoices, allPartyPayments).advanceAmount).toBe(100);
+      expect(allPartyPayments).toHaveLength(3); // Exactly the 3 party payments recorded, untouched
+    });
+
+    it('verifies multiple companies per party with separated payments architecture', () => {
+      const partyX: Party = { id: 'px', name: 'Super Customer', createdAt: '', updatedAt: '' };
+      const comp1: Company = { id: 'c1', name: 'Supplier Alpha', createdAt: '', updatedAt: '' };
+      const comp2: Company = { id: 'c2', name: 'Supplier Beta', createdAt: '', updatedAt: '' };
+
+      const invoices: PartyInvoice[] = [
+        { id: 'i1', invoiceNumber: '1', companyId: comp1.id, companyName: comp1.name, partyId: partyX.id, partyName: partyX.name, date: '2026-09-01', amount: 5000, createdAt: '', updatedAt: '' },
+        { id: 'i2', invoiceNumber: '2', companyId: comp2.id, companyName: comp2.name, partyId: partyX.id, partyName: partyX.name, date: '2026-09-02', amount: 8000, createdAt: '', updatedAt: '' },
+      ];
+
+      // Party total liability = 5000 + 8000 = 13,000
+      expect(calculatePartyBalance(partyX.id, invoices, []).currentBalance).toBe(13000);
+      // Company 1 liability = 5,000
+      expect(calculateSingleCompanyBalance(comp1.id, invoices, []).currentBalance).toBe(5000);
+      // Company 2 liability = 8,000
+      expect(calculateSingleCompanyBalance(comp2.id, invoices, []).currentBalance).toBe(8000);
+
+      // Party makes a general payment of 4,000
+      const partyPayments: PartyPayment[] = [
+        { id: 'p1', partyId: partyX.id, partyName: partyX.name, date: '2026-09-05', amount: 4000, paymentMethod: 'Cash', createdAt: '', updatedAt: '' },
+      ];
+
+      // Party balance is now 9,000
+      expect(calculatePartyBalance(partyX.id, invoices, partyPayments).currentBalance).toBe(9000);
+      // Companies are completely unaffected by party payment
+      expect(calculateSingleCompanyBalance(comp1.id, invoices, []).currentBalance).toBe(5000);
+      expect(calculateSingleCompanyBalance(comp2.id, invoices, []).currentBalance).toBe(8000);
+
+      // Business pays Supplier Alpha 2,000 and Supplier Beta 3,000
+      const companyPayments: CompanyPayment[] = [
+        { id: 'cp1', companyId: comp1.id, companyName: comp1.name, date: '2026-09-06', amount: 2000, paymentMethod: 'Bank', createdAt: '', updatedAt: '' },
+        { id: 'cp2', companyId: comp2.id, companyName: comp2.name, date: '2026-09-07', amount: 3000, paymentMethod: 'Bank', createdAt: '', updatedAt: '' },
+      ];
+
+      // Supplier Alpha balance is 3,000
+      expect(calculateSingleCompanyBalance(comp1.id, invoices, companyPayments).currentBalance).toBe(3000);
+      // Supplier Beta balance is 5,000
+      expect(calculateSingleCompanyBalance(comp2.id, invoices, companyPayments).currentBalance).toBe(5000);
+      // Party balance remains 9,000 (unaffected by company payments)
+      expect(calculatePartyBalance(partyX.id, invoices, partyPayments).currentBalance).toBe(9000);
+    });
+  });
+
+  describe('Automatic Recalculation & Zero/Empty State on Deletion Tests', () => {
+    const compA: Company = { id: 'comp-a', name: 'Alpha Traders', createdAt: '', updatedAt: '' };
+    const compB: Company = { id: 'comp-b', name: 'Beta Suppliers', createdAt: '', updatedAt: '' };
+    const party1: Party = { id: 'party-1', name: 'Party One', phone: '03001234567', createdAt: '', updatedAt: '' };
+    const party2: Party = { id: 'party-2', name: 'Party Two', phone: '03007654321', createdAt: '', updatedAt: '' };
+    const companies = [compA, compB];
+    const parties = [party1, party2];
+
+    it('validates creation, progressive deletion, and zero state for Dashboard and Analytics', () => {
+      // 1. Initial State: Empty database
+      let invoices: PartyInvoice[] = [];
+      let partyPayments: PartyPayment[] = [];
+      let companyPayments: CompanyPayment[] = [];
+
+      let analytics0 = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(analytics0.marketReceivable).toBe(0);
+      expect(analytics0.marketInvoiced).toBe(0);
+      expect(analytics0.marketRecovered).toBe(0);
+      expect(analytics0.companyLiability).toBe(0);
+      expect(analytics0.companyPaid).toBe(0);
+      expect(analytics0.companyOutstanding).toBe(0);
+      expect(analytics0.netOutstandingDifference).toBe(0);
+      expect(analytics0.invoicesCount).toBe(0);
+      expect(analytics0.partyPaymentsCount).toBe(0);
+      expect(analytics0.companyPaymentsCount).toBe(0);
+
+      // 2. Step 1: Create transactions
+      // Party 1 buys from Comp A: Rs 50,000
+      const inv1: PartyInvoice = {
+        id: 'inv-1',
+        invoiceNumber: '1',
+        companyId: compA.id,
+        companyName: compA.name,
+        partyId: party1.id,
+        partyName: party1.name,
+        date: '2026-09-26',
+        amount: 50000,
+        createdAt: '2026-09-26T10:00:00Z',
+        updatedAt: '2026-09-26T10:00:00Z',
+      };
+      // Party 2 buys from Comp B: Rs 30,000
+      const inv2: PartyInvoice = {
+        id: 'inv-2',
+        invoiceNumber: '2',
+        companyId: compB.id,
+        companyName: compB.name,
+        partyId: party2.id,
+        partyName: party2.name,
+        date: '2026-09-26',
+        amount: 30000,
+        createdAt: '2026-09-26T10:05:00Z',
+        updatedAt: '2026-09-26T10:05:00Z',
+      };
+      // Party 1 buys from Comp B (Multiple companies per party): Rs 20,000
+      const inv3: PartyInvoice = {
+        id: 'inv-3',
+        invoiceNumber: '3',
+        companyId: compB.id,
+        companyName: compB.name,
+        partyId: party1.id,
+        partyName: party1.name,
+        date: '2026-09-26',
+        amount: 20000,
+        createdAt: '2026-09-26T10:10:00Z',
+        updatedAt: '2026-09-26T10:10:00Z',
+      };
+
+      invoices = [inv1, inv2, inv3];
+
+      // Party 1 pays: Rs 15,000
+      const ppmt1: PartyPayment = {
+        id: 'ppmt-1',
+        partyId: party1.id,
+        partyName: party1.name,
+        date: '2026-09-26',
+        amount: 15000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-26T11:00:00Z',
+        updatedAt: '2026-09-26T11:00:00Z',
+      };
+      partyPayments = [ppmt1];
+
+      // Company A paid: Rs 10,000
+      const cpmt1: CompanyPayment = {
+        id: 'cpmt-1',
+        companyId: compA.id,
+        companyName: compA.name,
+        date: '2026-09-26',
+        amount: 10000,
+        paymentMethod: 'Bank',
+        createdAt: '2026-09-26T12:00:00Z',
+        updatedAt: '2026-09-26T12:00:00Z',
+      };
+      companyPayments = [cpmt1];
+
+      // Verify Dashboard and Analytics totals with all transactions
+      // Total Invoiced = 50,000 + 30,000 + 20,000 = 100,000
+      // Party 1 Due = (50,000 + 20,000) - 15,000 = 55,000
+      // Party 2 Due = 30,000
+      // Total Market Due = 55,000 + 30,000 = 85,000
+      // Total Market Recovered = 15,000
+      // Comp A Liability = 50,000; Paid = 10,000; Outstanding = 40,000
+      // Comp B Liability = 30,000 + 20,000 = 50,000; Paid = 0; Outstanding = 50,000
+      // Total Company Liability = 100,000; Total Company Paid = 10,000; Total Company Outstanding = 90,000
+      // Net Outstanding Difference = 85,000 - 90,000 = -5,000
+      let a1 = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(a1.marketInvoiced).toBe(100000);
+      expect(a1.marketReceivable).toBe(85000);
+      expect(a1.marketRecovered).toBe(15000);
+      expect(a1.companyLiability).toBe(100000);
+      expect(a1.companyPaid).toBe(100000 - 90000);
+      expect(a1.companyOutstanding).toBe(90000);
+      expect(a1.netOutstandingDifference).toBe(-5000);
+
+      // Verify Party and Company individual balances
+      expect(calculatePartyBalance(party1.id, invoices, partyPayments).currentBalance).toBe(55000);
+      expect(calculatePartyBalance(party2.id, invoices, partyPayments).currentBalance).toBe(30000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(40000);
+      expect(calculateSingleCompanyBalance(compB.id, invoices, companyPayments).currentBalance).toBe(50000);
+
+      // 3. Step 2: Edit a transaction (Edit inv1 from 50,000 to 60,000)
+      const editedInv1 = { ...inv1, amount: 60000 };
+      invoices = [editedInv1, inv2, inv3];
+
+      let aEdit = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(aEdit.marketInvoiced).toBe(110000);
+      expect(aEdit.companyLiability).toBe(110000);
+      expect(calculatePartyBalance(party1.id, invoices, partyPayments).currentBalance).toBe(65000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(50000);
+
+      // 4. Step 3: Delete one transaction (Delete inv3: Rs 20,000 for Party 1 from Comp B)
+      invoices = invoices.filter((i) => i.id !== 'inv-3');
+      let aDel1 = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      // Market Invoiced: 60,000 + 30,000 = 90,000
+      expect(aDel1.marketInvoiced).toBe(90000);
+      // Party 1 Due: 60,000 - 15,000 = 45,000
+      expect(calculatePartyBalance(party1.id, invoices, partyPayments).currentBalance).toBe(45000);
+      // Comp B Liability: only inv2 (30,000) remains
+      expect(calculateSingleCompanyBalance(compB.id, invoices, companyPayments).currentBalance).toBe(30000);
+      // Comp A Liability: unchanged at 50,000
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(50000);
+      // Total Company Outstanding: 50,000 + 30,000 = 80,000
+      expect(aDel1.companyOutstanding).toBe(80000);
+
+      // 5. Step 4: Delete Party Payment (Delete ppmt1)
+      partyPayments = [];
+      let aDelPmt = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      // Party 1 Due increases back to 60,000
+      expect(calculatePartyBalance(party1.id, invoices, partyPayments).currentBalance).toBe(60000);
+      expect(aDelPmt.marketRecovered).toBe(0);
+      // Company balances remain strictly unaffected
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(50000);
+      expect(calculateSingleCompanyBalance(compB.id, invoices, companyPayments).currentBalance).toBe(30000);
+
+      // 6. Step 5: Delete Company Payment (Delete cpmt1)
+      companyPayments = [];
+      let aDelCompPmt = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      // Comp A Outstanding increases back to 60,000 (liability = 60,000, paid = 0)
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(60000);
+      expect(aDelCompPmt.companyPaid).toBe(0);
+      // Party balances remain strictly unaffected
+      expect(calculatePartyBalance(party1.id, invoices, partyPayments).currentBalance).toBe(60000);
+
+      // 7. Step 6: Delete remaining invoices one by one
+      invoices = invoices.filter((i) => i.id !== 'inv-2');
+      let aDel2 = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(aDel2.marketInvoiced).toBe(60000);
+      expect(calculatePartyBalance(party2.id, invoices, partyPayments).currentBalance).toBe(0);
+      expect(calculateSingleCompanyBalance(compB.id, invoices, companyPayments).currentBalance).toBe(0);
+
+      // Delete the final invoice (inv1)
+      invoices = [];
+      let aFinal = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+
+      // 8. Step 7: Verify complete ZERO/EMPTY state
+      expect(aFinal.marketInvoiced).toBe(0);
+      expect(aFinal.marketReceivable).toBe(0);
+      expect(aFinal.marketRecovered).toBe(0);
+      expect(aFinal.companyLiability).toBe(0);
+      expect(aFinal.companyPaid).toBe(0);
+      expect(aFinal.companyOutstanding).toBe(0);
+      expect(aFinal.netOutstandingDifference).toBe(0);
+      expect(aFinal.todayRecovery).toBe(0);
+      expect(aFinal.todayCompanyPayment).toBe(0);
+      expect(aFinal.invoicesCount).toBe(0);
+      expect(aFinal.partyPaymentsCount).toBe(0);
+      expect(aFinal.companyPaymentsCount).toBe(0);
+
+      // Both parties show 0 balance
+      expect(calculatePartyBalance(party1.id, [], []).currentBalance).toBe(0);
+      expect(calculatePartyBalance(party2.id, [], []).currentBalance).toBe(0);
+      // Both companies show 0 balance
+      expect(calculateSingleCompanyBalance(compA.id, [], []).currentBalance).toBe(0);
+      expect(calculateSingleCompanyBalance(compB.id, [], []).currentBalance).toBe(0);
+
+      // Recent transactions feed is empty
+      expect(getRecentTransactions([], [], [], 15)).toHaveLength(0);
     });
   });
 });

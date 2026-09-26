@@ -27,6 +27,7 @@ export interface PartyPayment {
   id: string;
   partyId: string;
   partyName: string;
+  /** @deprecated Kept for historical backup compatibility; Party Payment has ONLY a Party relationship */
   companyId?: string;
   companyName?: string;
   invoiceId?: string;
@@ -69,8 +70,6 @@ export interface CompanyPayment {
   id: string;
   companyId?: string;
   companyName?: string;
-  partyId?: string;
-  partyName?: string;
   date: string; // YYYY-MM-DD
   amount: number;
   paymentMethod: CompanyPaymentMethod;

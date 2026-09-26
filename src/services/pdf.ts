@@ -505,7 +505,7 @@ export async function downloadPartyLedgerPDF(
 export function generateCompanyLedgerPDF(
   company: Company,
   invoices: (PartyInvoice | CompanyInvoice)[],
-  payments: (PartyPayment | CompanyPayment)[],
+  payments: CompanyPayment[],
   salesmanName = 'Business Ledger',
   startDate?: string,
   endDate?: string
@@ -770,7 +770,7 @@ export function generateCompanyLedgerPDF(
 export async function exportCompanyLedgerPDF(
   company: Company,
   invoices: (PartyInvoice | CompanyInvoice)[],
-  payments: (PartyPayment | CompanyPayment)[],
+  payments: CompanyPayment[],
   destination: 'mobile' | 'whatsapp',
   salesmanName?: string,
   startDate?: string,

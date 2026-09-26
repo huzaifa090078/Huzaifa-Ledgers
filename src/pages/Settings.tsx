@@ -41,7 +41,7 @@ interface SettingsProps {
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
   companies?: Company[];
-  companyInvoices?: CompanyInvoice[];
+  companyInvoices?: (PartyInvoice | CompanyInvoice)[];
   onDataChanged: () => void;
 }
 

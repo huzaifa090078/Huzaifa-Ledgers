@@ -28,7 +28,7 @@ interface DashboardProps {
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
   companies?: Company[];
-  companyInvoices?: CompanyInvoice[];
+  companyInvoices?: (PartyInvoice | CompanyInvoice)[];
   dailyReconciliations?: DailyReconciliation[];
   onOpenAddParty: () => void;
   onOpenAddInvoice?: () => void;

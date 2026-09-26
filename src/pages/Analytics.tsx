@@ -23,7 +23,7 @@ interface AnalyticsProps {
   partyPayments: PartyPayment[];
   companyPayments: CompanyPayment[];
   companies?: Company[];
-  companyInvoices?: CompanyInvoice[];
+  companyInvoices?: (PartyInvoice | CompanyInvoice)[];
   onSelectParty: (partyId: string) => void;
 }
 

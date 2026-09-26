@@ -651,11 +651,6 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                             <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
                               {method}
                             </span>
-                            {pmt.companyName && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
-                                {pmt.companyName}
-                              </span>
-                            )}
                             {pmt.invoiceNumber && (
                               <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-md">
                                 Inv #{pmt.invoiceNumber}
