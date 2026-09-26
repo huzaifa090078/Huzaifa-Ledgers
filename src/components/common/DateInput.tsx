@@ -158,40 +158,39 @@ export const DateInput: React.FC<DateInputProps> = ({
     };
   }, [isOpen]);
 
-  // Handle direct text typing in DD-MM-YYYY format
-  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let input = e.target.value;
-
-    // Filter out non-digits and non-hyphens
-    let raw = input.replace(/[^\d-]/g, '');
-
-    // Auto format typing: 25092026 -> 25-09-2026
-    const digits = raw.replace(/-/g, '');
-    let formatted = '';
-    if (digits.length <= 2) {
-      formatted = digits;
-    } else if (digits.length <= 4) {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    } else {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
-    }
-
-    setDisplayText(formatted);
-
-    // If complete DD-MM-YYYY format entered (10 chars e.g. 25-09-2026)
-    if (/^\d{2}-\d{2}-\d{4}$/.test(formatted)) {
-      const [dStr, mStr, yStr] = formatted.split('-');
-      const d = parseInt(dStr, 10);
-      const m = parseInt(mStr, 10);
-      const y = parseInt(yStr, 10);
-      if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
-        const ymd = `${yStr}-${mStr}-${dStr}`;
-        onChange(ymd);
-        setViewYear(y);
-        setViewMonth(m - 1);
+  // Whenever calendar opens or value changes, synchronize viewYear and viewMonth to selected date or current date
+  useEffect(() => {
+    if (isOpen) {
+      if (normalizedValue) {
+        const parts = normalizedValue.split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          if (!isNaN(y) && !isNaN(m) && m >= 0 && m <= 11) {
+            setViewYear(y);
+            setViewMonth(m);
+            return;
+          }
+        }
       }
+      const now = new Date();
+      setViewYear(now.getFullYear());
+      setViewMonth(now.getMonth());
     }
-  };
+  }, [isOpen, normalizedValue]);
+
+  // Dynamic list of selectable years
+  const yearOptions = useMemo(() => {
+    const start = 2015;
+    const end = 2035;
+    const years: number[] = [];
+    for (let yr = start; yr <= end; yr++) {
+      years.push(yr);
+    }
+    if (viewYear < start) years.unshift(viewYear);
+    if (viewYear > end) years.push(viewYear);
+    return years;
+  }, [viewYear]);
 
   // Select date from calendar picker
   const handleSelectDay = (day: number) => {
@@ -274,47 +273,54 @@ export const DateInput: React.FC<DateInputProps> = ({
         </label>
       )}
 
-      <div className="relative flex items-center">
-        {/* Calendar Icon Button */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => !disabled && setIsOpen((prev) => !prev)}
-          className="absolute inset-y-0 left-0 pl-3 pr-2 flex items-center text-slate-400 hover:text-sky-600 cursor-pointer focus:outline-hidden"
-          title="Open Calendar"
-        >
+      {/* Date Field Container - Tapping anywhere triggers calendar, blocks keyboard */}
+      <div
+        className={`relative flex items-center rounded-lg ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        onClick={() => {
+          if (!disabled) {
+            setIsOpen((prev) => !prev);
+          }
+        }}
+      >
+        {/* Calendar Icon */}
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
           <CalendarIcon className="w-4 h-4" />
-        </button>
+        </div>
 
-        {/* Formatted Date Input Field */}
+        {/* Formatted Date Field (Read-only, software keyboard strictly blocked) */}
         <input
           type="text"
+          readOnly
+          inputMode="none"
+          tabIndex={-1}
           value={displayText}
-          onChange={handleTextChange}
-          onClick={() => !disabled && setIsOpen(true)}
+          placeholder={placeholder}
           disabled={disabled}
           required={required}
-          placeholder={placeholder}
-          maxLength={10}
-          className={`w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500 font-mono font-medium tracking-wide text-slate-800 disabled:opacity-60 disabled:cursor-not-allowed ${inputClassName}`}
+          onFocus={(e) => {
+            // Immediate blur guarantees mobile OS software keyboard NEVER appears
+            e.currentTarget.blur();
+          }}
+          className={`w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-mono font-medium tracking-wide text-slate-800 cursor-pointer select-none focus:outline-hidden hover:border-sky-400 focus:border-sky-500 transition-colors ${inputClassName}`}
         />
 
-        {/* Clear or Calendar trigger */}
+        {/* Clear date button */}
         {displayText && !disabled && (
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setDisplayText('');
               onChange('');
+              setIsOpen(false);
             }}
-            className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-300 hover:text-slate-600 focus:outline-hidden"
+            className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-300 hover:text-slate-600 focus:outline-hidden cursor-pointer"
             title="Clear date"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
-
 
       {/* Interactive Calendar Dropdown Popup */}
       {isOpen && (
@@ -353,7 +359,7 @@ export const DateInput: React.FC<DateInputProps> = ({
                 onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
                 className="text-xs font-bold text-slate-800 bg-transparent border-0 rounded-md cursor-pointer hover:bg-slate-100 p-1 focus:ring-0 focus:outline-hidden font-mono"
               >
-                {Array.from({ length: 25 }, (_, i) => 2015 + i).map((yr) => (
+                {yearOptions.map((yr) => (
                   <option key={yr} value={yr}>
                     {yr}
                   </option>
