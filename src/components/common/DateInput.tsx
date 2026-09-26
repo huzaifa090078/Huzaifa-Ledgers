@@ -315,15 +315,6 @@ export const DateInput: React.FC<DateInputProps> = ({
         )}
       </div>
 
-      {/* Date format reminder badge */}
-      <div className="flex items-center justify-between mt-1 px-0.5">
-        <span className="text-[10px] text-slate-500 font-mono">Format: <strong>DD-MM-YYYY</strong></span>
-        {displayText && (
-          <span className="text-[10px] text-sky-700 font-mono font-bold">
-            {displayText}
-          </span>
-        )}
-      </div>
 
       {/* Interactive Calendar Dropdown Popup */}
       {isOpen && (
