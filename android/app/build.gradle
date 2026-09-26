@@ -33,6 +33,8 @@ android {
                 storePassword ledgerKeystorePassword
                 keyAlias 'ledger'
                 keyPassword ledgerKeyPassword
+                v1SigningEnabled true
+                v2SigningEnabled true
             }
         }
     }
