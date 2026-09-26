@@ -13,6 +13,7 @@ export interface DateInputProps {
   inputClassName?: string;
   min?: string;
   max?: string;
+  align?: 'left' | 'right' | 'auto';
 }
 
 const MONTH_NAMES = [
@@ -41,6 +42,7 @@ export const DateInput: React.FC<DateInputProps> = ({
   placeholder = 'DD-MM-YYYY',
   className = '',
   inputClassName = '',
+  align = 'auto',
 }) => {
   // Normalize incoming value to YYYY-MM-DD
   const normalizedValue = useMemo(() => {
@@ -54,6 +56,8 @@ export const DateInput: React.FC<DateInputProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [calendarAlign, setCalendarAlign] = useState<'left' | 'right'>(align === 'right' ? 'right' : 'left');
+  const [openUpward, setOpenUpward] = useState(false);
 
   // Calendar navigation state (year and month 0-11)
   const [viewYear, setViewYear] = useState(() => {
@@ -72,6 +76,53 @@ export const DateInput: React.FC<DateInputProps> = ({
     return new Date().getMonth();
   });
 
+  // Calculate smart horizontal and vertical placement when calendar opens
+  useEffect(() => {
+    if (align && align !== 'auto') {
+      setCalendarAlign(align);
+    }
+  }, [align]);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const parentModal = containerRef.current.closest('form, .max-w-md, .max-w-lg, .max-w-sm');
+      const parentRect = parentModal ? parentModal.getBoundingClientRect() : null;
+
+      // Smart Horizontal Alignment: if on right half of parent container/screen, anchor right-0
+      if (align === 'auto' || !align) {
+        if (parentRect) {
+          const isRightHalf = (rect.left - parentRect.left) > (parentRect.width / 2) - 40;
+          const spaceOnRight = parentRect.right - rect.left;
+          if (isRightHalf || spaceOnRight < 275) {
+            setCalendarAlign('right');
+          } else {
+            setCalendarAlign('left');
+          }
+        } else {
+          if (window.innerWidth - rect.left < 280 || rect.left > window.innerWidth / 2) {
+            setCalendarAlign('right');
+          } else {
+            setCalendarAlign('left');
+          }
+        }
+      }
+
+      // Smart Vertical Alignment: relative to parent modal bounds and viewport
+      const modalBottom = parentRect ? Math.min(parentRect.bottom, window.innerHeight) : window.innerHeight;
+      const modalTop = parentRect ? Math.max(parentRect.top, 0) : 0;
+      const spaceBelow = modalBottom - rect.bottom;
+      const spaceAbove = rect.top - modalTop;
+
+      // Calendar height is ~235px. If space below is tight and space above has room, pop upward
+      if (spaceBelow < 240 && spaceAbove > 210) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen, align]);
+
   // Sync display text when value prop changes externally
   useEffect(() => {
     const formatted = formatDateDisplay(normalizedValue);
@@ -85,18 +136,25 @@ export const DateInput: React.FC<DateInputProps> = ({
     }
   }, [normalizedValue]);
 
-  // Close calendar on click outside
+  // Close calendar on click outside or escape key
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
     if (isOpen) {
       document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen]);
 
@@ -269,15 +327,21 @@ export const DateInput: React.FC<DateInputProps> = ({
 
       {/* Interactive Calendar Dropdown Popup */}
       {isOpen && (
-        <div className="absolute z-60 left-0 mt-1.5 w-64 sm:w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-3.5 animate-in fade-in duration-150">
+        <div
+          className={`absolute z-[70] ${
+            calendarAlign === 'right' ? 'right-0' : 'left-0'
+          } ${
+            openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          } w-[260px] max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-2.5 animate-in fade-in zoom-in-95 duration-150`}
+        >
           {/* Calendar Header with Controls */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <button
               type="button"
               onClick={prevMonth}
               className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
 
             <div className="flex items-center space-x-1">
@@ -311,24 +375,24 @@ export const DateInput: React.FC<DateInputProps> = ({
               onClick={nextMonth}
               className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Days of Week Header */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
             {DAYS_HEADER.map((d) => (
-              <div key={d} className="text-[10px] font-bold text-slate-400 py-1 font-mono">
+              <div key={d} className="text-[9px] font-bold text-slate-400 py-0.5 font-mono">
                 {d}
               </div>
             ))}
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1 text-center">
+          <div className="grid grid-cols-7 gap-0.5 text-center">
             {calendarDays.map((day, index) => {
               if (day === null) {
-                return <div key={`empty-${index}`} className="p-1.5" />;
+                return <div key={`empty-${index}`} className="p-1" />;
               }
               const isSelected = day === selectedDay;
               const isToday =
@@ -341,7 +405,7 @@ export const DateInput: React.FC<DateInputProps> = ({
                   key={`day-${day}`}
                   type="button"
                   onClick={() => handleSelectDay(day)}
-                  className={`py-1.5 text-xs font-mono rounded-lg transition ${
+                  className={`py-1 text-xs font-mono rounded-md transition ${
                     isSelected
                       ? 'bg-sky-600 text-white font-bold shadow-xs'
                       : isToday
@@ -356,18 +420,18 @@ export const DateInput: React.FC<DateInputProps> = ({
           </div>
 
           {/* Today and Close Buttons */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
             <button
               type="button"
               onClick={handleSetToday}
-              className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 active:underline"
+              className="text-[10px] font-semibold text-sky-600 hover:text-sky-700 active:underline"
             >
-              Select Today ({formatDateDisplay(getTodayDateString())})
+              Today ({formatDateDisplay(getTodayDateString())})
             </button>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition"
+              className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition"
             >
               Done
             </button>

@@ -761,6 +761,7 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
                         label="From Date"
                         value={startDate}
                         onChange={setStartDate}
+                        align="left"
                       />
                     </div>
                     <div>
@@ -768,6 +769,7 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
                         label="To Date"
                         value={endDate}
                         onChange={setEndDate}
+                        align="right"
                       />
                     </div>
                   </div>

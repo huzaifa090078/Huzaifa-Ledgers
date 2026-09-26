@@ -568,8 +568,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* Restore Confirmation Dialog */}
       {restoreModalOpen && pendingRestorePayload && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
-          <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden p-5 space-y-4 my-auto">
             <div className="flex items-center space-x-2 text-amber-600">
               <AlertTriangle className="w-6 h-6" />
               <h3 className="text-base font-bold text-slate-900 m-0">Confirm Safe Restore</h3>
@@ -637,8 +637,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* Clear All Confirmation Dialog */}
       {clearModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
-          <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden p-5 space-y-4 my-auto">
             <div className="flex items-center space-x-2 text-red-600">
               <Trash2 className="w-6 h-6" />
               <h3 className="text-base font-bold text-red-900 m-0">Reset All Ledger Data</h3>

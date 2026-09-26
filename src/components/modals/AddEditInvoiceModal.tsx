@@ -207,8 +207,8 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
-      <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom duration-200 max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2">
             <FileText className="w-5 h-5 text-sky-600" />
@@ -387,6 +387,7 @@ export const AddEditInvoiceModal: React.FC<AddEditInvoiceModalProps> = ({
                 required
                 value={date}
                 onChange={setDate}
+                align="right"
               />
             </div>
           </div>

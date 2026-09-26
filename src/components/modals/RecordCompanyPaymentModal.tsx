@@ -108,9 +108,9 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
-      <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom duration-200">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-indigo-600" />
             <h2 className="text-base font-semibold text-slate-800 m-0">
@@ -125,7 +125,7 @@ export const RecordCompanyPaymentModal: React.FC<RecordCompanyPaymentModalProps>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
+        <form onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 text-xs bg-red-50 text-red-700 rounded-lg border border-red-200">
               {error}

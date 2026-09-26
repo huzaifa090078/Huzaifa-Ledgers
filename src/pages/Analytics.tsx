@@ -161,6 +161,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
                   label="From Date"
                   value={customStart}
                   onChange={setCustomStart}
+                  align="left"
                 />
               </div>
               <div>
@@ -168,6 +169,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
                   label="To Date"
                   value={customEnd}
                   onChange={setCustomEnd}
+                  align="right"
                 />
               </div>
             </div>
