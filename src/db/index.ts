@@ -114,3 +114,32 @@ export async function clearAllData(): Promise<void> {
     }
   );
 }
+
+/**
+ * Automatically ensures the active Dexie database has the business ledger data restored.
+ * If the active database is empty (0 parties and 0 companies) or missing restored records,
+ * it safely imports the verified backup seed from SmartTech_Ledger_Backup_2026-09-26.json.
+ */
+export async function ensureActiveDatabasePopulated(force = false): Promise<boolean> {
+  try {
+    const partyCount = await db.parties.count();
+    const companyCount = await db.companies.count();
+    
+    // Check if Hassan Traders Login exists
+    const hasHassan = await db.companies
+      .filter((c) => c.name.toLowerCase().includes('hassan traders'))
+      .first();
+
+    if (force || (partyCount === 0 && companyCount === 0) || !hasHassan) {
+      const { restoreBackupSafely } = await import('../services/backup');
+      const { RESTORED_BACKUP_PAYLOAD } = await import('../data/restoredBackupSeed');
+      const res = await restoreBackupSafely(RESTORED_BACKUP_PAYLOAD);
+      return res.success;
+    }
+    return false;
+  } catch (err) {
+    console.error('ensureActiveDatabasePopulated error:', err);
+    return false;
+  }
+}
+

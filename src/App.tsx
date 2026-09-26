@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { db } from './db';
+import { db, ensureActiveDatabasePopulated } from './db';
 import type {
   Party,
   PartyInvoice,
@@ -231,8 +231,11 @@ export const App: React.FC = () => {
     };
   }, [handleBack]);
 
-  // Initialize automatic local and cloud backup engine on mount
+  // Initialize active database from verified backup if empty, and start auto-backup engine
   useEffect(() => {
+    ensureActiveDatabasePopulated().catch((err) => {
+      console.warn('Initial backup population check:', err);
+    });
     initAutoBackupSystem();
   }, []);
 

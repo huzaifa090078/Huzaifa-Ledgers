@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-tech-ledger-v1';
+const CACHE_NAME = 'smart-tech-ledger-v1.4';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

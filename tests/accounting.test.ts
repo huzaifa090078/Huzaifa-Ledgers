@@ -1617,6 +1617,55 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(compTimeline.finalBalance).toBe(172210);
     });
   });
+
+  describe('Restored Backup Data Verification', () => {
+    it('verifies that RESTORED_BACKUP_PAYLOAD contains all real business data with exact balances', async () => {
+      const { RESTORED_BACKUP_PAYLOAD } = await import('../src/data/restoredBackupSeed');
+      expect(RESTORED_BACKUP_PAYLOAD.parties).toHaveLength(11);
+      expect(RESTORED_BACKUP_PAYLOAD.companies).toHaveLength(1);
+      expect(RESTORED_BACKUP_PAYLOAD.invoices).toHaveLength(11);
+      expect(RESTORED_BACKUP_PAYLOAD.partyPayments).toHaveLength(24);
+      expect(RESTORED_BACKUP_PAYLOAD.companyPayments).toHaveLength(4);
+      expect(RESTORED_BACKUP_PAYLOAD.companyInvoices).toHaveLength(11);
+
+      // Verify Total Invoices Sum = Rs 216,210
+      const totalInvoices = RESTORED_BACKUP_PAYLOAD.invoices.reduce((sum, inv) => sum + inv.amount, 0);
+      expect(totalInvoices).toBe(216210);
+
+      // Verify Total Party Payments Sum = Rs 44,000
+      const totalPartyPayments = RESTORED_BACKUP_PAYLOAD.partyPayments.reduce((sum, p) => sum + p.amount, 0);
+      expect(totalPartyPayments).toBe(44000);
+
+      // Net Market Receivable = Rs 172,210
+      expect(totalInvoices - totalPartyPayments).toBe(172210);
+
+      // Verify Company Payables
+      const totalCompanyInvoices = RESTORED_BACKUP_PAYLOAD.companyInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+      expect(totalCompanyInvoices).toBe(216210);
+
+      const totalCompanyPayments = RESTORED_BACKUP_PAYLOAD.companyPayments.reduce((sum, p) => sum + p.amount, 0);
+      expect(totalCompanyPayments).toBe(44000);
+
+      // Net Company Payable = Rs 172,210
+      expect(totalCompanyInvoices - totalCompanyPayments).toBe(172210);
+
+      // Net Difference = 0
+      expect((totalInvoices - totalPartyPayments) - (totalCompanyInvoices - totalCompanyPayments)).toBe(0);
+
+      // Verify bidirectional enrichment on all company invoices
+      RESTORED_BACKUP_PAYLOAD.companyInvoices.forEach(inv => {
+        expect(inv.partyId).toBeTruthy();
+        expect(inv.partyName).toBeTruthy();
+      });
+
+      // Verify companyId on all invoices
+      const companyId = RESTORED_BACKUP_PAYLOAD.companies[0].id;
+      RESTORED_BACKUP_PAYLOAD.invoices.forEach(inv => {
+        expect(inv.companyId).toBe(companyId);
+        expect(inv.companyName).toBe('Hassan Traders Login');
+      });
+    });
+  });
 });
 
 

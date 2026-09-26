@@ -35,7 +35,7 @@ export interface BackupDataPayload {
   companies?: Company[];
   companyInvoices?: CompanyInvoice[];
   settings?: any;
-  data: {
+  data?: {
     parties: Party[];
     invoices: PartyInvoice[];
     partyPayments: PartyPayment[];
@@ -107,7 +107,7 @@ export async function generateBackupPayload(): Promise<BackupDataPayload> {
 
   const payload: BackupDataPayload = {
     backupFormatVersion: 1,
-    appVersion: '1.3',
+    appVersion: '1.4',
     databaseVersion: 4,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -497,6 +497,22 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
       return pmt;
     });
 
+    const enrichedCompanyInvoices = (payload.companyInvoices || []).map((ci) => {
+      if (!ci.partyId && payload.invoices && payload.invoices.length > 0) {
+        const match = payload.invoices.find(
+          (inv) => String(inv.invoiceNumber).trim().toLowerCase() === String(ci.invoiceNumber).trim().toLowerCase()
+        );
+        if (match) {
+          return {
+            ...ci,
+            partyId: match.partyId,
+            partyName: match.partyName,
+          };
+        }
+      }
+      return ci;
+    });
+
     await db.transaction(
       'rw',
       [
@@ -542,8 +558,8 @@ export async function restoreBackupSafely(rawPayload: any): Promise<{
         if (payload.companies && payload.companies.length > 0) {
           await db.companies.bulkAdd(payload.companies);
         }
-        if (payload.companyInvoices && payload.companyInvoices.length > 0) {
-          await db.companyInvoices.bulkAdd(payload.companyInvoices);
+        if (enrichedCompanyInvoices.length > 0) {
+          await db.companyInvoices.bulkAdd(enrichedCompanyInvoices);
         }
       }
     );
