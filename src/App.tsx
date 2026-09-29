@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { db, ensureActiveDatabasePopulated } from './db';
+import { db, generateId } from './db';
 import type {
   Party,
   PartyInvoice,
@@ -15,6 +15,7 @@ import type { NavTab } from './components/BottomNav';
 import { BottomNav } from './components/BottomNav';
 import { initAutoBackupSystem } from './services/autoBackup';
 import { checkCompanyInvoiceUniqueness } from './services/accounting';
+import { initMobileKeyboardScrollHelper } from './utils/mobileKeyboard';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -241,12 +242,13 @@ export const App: React.FC = () => {
     };
   }, [handleBack]);
 
-  // Initialize active database from verified backup if empty, and start auto-backup engine
+  // Start auto-backup engine and mobile keyboard auto-scroll assistant on mount
   useEffect(() => {
-    ensureActiveDatabasePopulated().catch((err) => {
-      console.warn('Initial backup population check:', err);
-    });
     initAutoBackupSystem();
+    const cleanupKeyboard = initMobileKeyboardScrollHelper();
+    return () => {
+      cleanupKeyboard();
+    };
   }, []);
 
   // Selected Party object if in party detail view
@@ -336,7 +338,38 @@ export const App: React.FC = () => {
 
   // --- Handlers for Party Payments ---
   const handleSavePartyPayment = async (payment: PartyPayment) => {
-    await db.partyPayments.put(payment);
+    await db.transaction('rw', [db.partyPayments, db.companyPayments], async () => {
+      if (payment.isDirectCompanyPayment && payment.companyId) {
+        const linkedId = payment.linkedPaymentId || `cpmt-${generateId()}`;
+        payment.linkedPaymentId = linkedId;
+        await db.partyPayments.put(payment);
+
+        const linkedCompanyPayment: CompanyPayment = {
+          id: linkedId,
+          companyId: payment.companyId,
+          companyName: payment.companyName,
+          partyId: payment.partyId,
+          partyName: payment.partyName,
+          isDirectPartyPayment: true,
+          linkedPaymentId: payment.id,
+          date: payment.date,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod as any,
+          reference: payment.reference,
+          note: payment.note,
+          createdAt: payment.createdAt,
+          updatedAt: payment.updatedAt,
+        };
+        await db.companyPayments.put(linkedCompanyPayment);
+      } else {
+        if (payment.linkedPaymentId) {
+          await db.companyPayments.delete(payment.linkedPaymentId);
+          payment.linkedPaymentId = undefined;
+          payment.isDirectCompanyPayment = false;
+        }
+        await db.partyPayments.put(payment);
+      }
+    });
   };
 
   const handleOpenRecordPartyPayment = (partyId?: string) => {
@@ -352,20 +385,59 @@ export const App: React.FC = () => {
   };
 
   const handleDeletePartyPayment = (payment: PartyPayment) => {
+    const isDirect = Boolean(payment.linkedPaymentId || (payment.isDirectCompanyPayment && payment.companyId));
     setDeleteModalState({
       isOpen: true,
       title: 'Delete Payment',
       message: `Are you sure you want to delete this payment of Rs ${payment.amount.toLocaleString()} received via ${payment.paymentMethod}?`,
-      warningNote: 'Deleting this payment will automatically update the Party ledger.',
+      warningNote: isDirect
+        ? 'This is a direct payment to a company. Deleting it will reverse the transaction in both Party and Company ledgers.'
+        : 'Deleting this payment will automatically update the Party ledger.',
       action: async () => {
-        await db.partyPayments.delete(payment.id);
+        await db.transaction('rw', [db.partyPayments, db.companyPayments], async () => {
+          await db.partyPayments.delete(payment.id);
+          if (payment.linkedPaymentId) {
+            await db.companyPayments.delete(payment.linkedPaymentId);
+          }
+        });
       },
     });
   };
 
   // --- Handlers for Company Payments ---
   const handleSaveCompanyPayment = async (payment: CompanyPayment) => {
-    await db.companyPayments.put(payment);
+    await db.transaction('rw', [db.partyPayments, db.companyPayments], async () => {
+      if (payment.isDirectPartyPayment && payment.partyId) {
+        const linkedId = payment.linkedPaymentId || `pmt-${generateId()}`;
+        payment.linkedPaymentId = linkedId;
+        await db.companyPayments.put(payment);
+
+        const linkedPartyPayment: PartyPayment = {
+          id: linkedId,
+          partyId: payment.partyId,
+          partyName: payment.partyName || '',
+          companyId: payment.companyId,
+          companyName: payment.companyName,
+          isDirectCompanyPayment: true,
+          linkedPaymentId: payment.id,
+          date: payment.date,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod as any,
+          reference: payment.reference,
+          note: payment.note,
+          createdAt: payment.createdAt,
+          updatedAt: payment.updatedAt,
+        };
+        await db.partyPayments.put(linkedPartyPayment);
+      } else {
+        if (payment.linkedPaymentId) {
+          await db.partyPayments.delete(payment.linkedPaymentId);
+          payment.linkedPaymentId = undefined;
+          payment.isDirectPartyPayment = false;
+        }
+        await db.companyPayments.put(payment);
+      }
+    });
   };
 
   const handleOpenRecordCompanyPayment = (companyId?: string) => {
@@ -381,13 +453,21 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteCompanyPayment = (payment: CompanyPayment) => {
+    const isDirect = Boolean(payment.linkedPaymentId || (payment.isDirectPartyPayment && payment.partyId));
     setDeleteModalState({
       isOpen: true,
       title: 'Delete Company Payment',
       message: `Are you sure you want to delete this payment of Rs ${payment.amount.toLocaleString()} paid via ${payment.paymentMethod}?`,
-      warningNote: 'Deleting this payment will automatically update the Company ledger.',
+      warningNote: isDirect
+        ? 'This is a direct payment from a customer. Deleting it will reverse the transaction in both Company and Party ledgers.'
+        : 'Deleting this payment will automatically update the Company ledger.',
       action: async () => {
-        await db.companyPayments.delete(payment.id);
+        await db.transaction('rw', [db.partyPayments, db.companyPayments], async () => {
+          await db.companyPayments.delete(payment.id);
+          if (payment.linkedPaymentId) {
+            await db.partyPayments.delete(payment.linkedPaymentId);
+          }
+        });
       },
     });
   };
@@ -606,6 +686,7 @@ export const App: React.FC = () => {
         onClose={() => setIsCompanyPaymentModalOpen(false)}
         onSave={handleSaveCompanyPayment}
         companies={companies}
+        parties={parties}
         defaultCompanyId={companyPaymentDefaultCompanyId}
         editingPayment={editingCompanyPayment}
       />

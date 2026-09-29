@@ -27,8 +27,8 @@ import {
   readLatestBackupFromFile,
   type BackupDataPayload,
 } from '../services/backup';
-import { clearAllData, db, generateId } from '../db';
-import { getTodayDateString, formatLocalTimestamp } from '../services/accounting';
+import { clearAllData } from '../db';
+import { formatLocalTimestamp } from '../services/accounting';
 import {
   getAutoBackupStatus,
   performAutoBackup,
@@ -214,102 +214,6 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const seedSampleData = async () => {
-    try {
-      const today = getTodayDateString();
-      const p1: Party = {
-        id: generateId(),
-        name: 'Ali Traders',
-        phone: '0300-1234567',
-        address: 'Shop #4, Main Market, Lahore',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const p2: Party = {
-        id: generateId(),
-        name: 'Bilal Traders',
-        phone: '0321-9876543',
-        address: 'Shop #12, Commercial Market, Lahore',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const p3: Party = {
-        id: generateId(),
-        name: 'Usman General Store',
-        phone: '0333-5554433',
-        address: 'Shop #18, Saddar Bazaar, Karachi',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const inv1: PartyInvoice = {
-        id: generateId(),
-        invoiceNumber: 'A-1025',
-        partyId: p1.id,
-        partyName: p1.name,
-        date: today,
-        amount: 30000,
-        description: 'Stock supply items',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const inv2: PartyInvoice = {
-        id: generateId(),
-        invoiceNumber: 'B-1026',
-        partyId: p2.id,
-        partyName: p2.name,
-        date: today,
-        amount: 45000,
-        description: 'Retail goods delivery',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const inv3: PartyInvoice = {
-        id: generateId(),
-        invoiceNumber: 'U-1027',
-        partyId: p3.id,
-        partyName: p3.name,
-        date: today,
-        amount: 15000,
-        description: 'Assorted product inventory',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const pmt1: PartyPayment = {
-        id: generateId(),
-        partyId: p1.id,
-        partyName: p1.name,
-        date: today,
-        amount: 10000,
-        paymentMethod: 'Cash',
-        reference: 'Cash Received',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const cpmt1: CompanyPayment = {
-        id: generateId(),
-        date: today,
-        amount: 15000,
-        paymentMethod: 'Bank',
-        reference: 'HBL-DEP-4912',
-        note: 'Salesman deposit to Login Smart Technology company account',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await db.parties.bulkAdd([p1, p2, p3]);
-      await db.invoices.bulkAdd([inv1, inv2, inv3]);
-      await db.partyPayments.bulkAdd([pmt1]);
-      await db.companyPayments.bulkAdd([cpmt1]);
-
-      onDataChanged();
-      setFeedback({ type: 'success', message: 'Sample scenario data loaded successfully.' });
-    } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to load demo data.' });
-    }
-  };
 
   return (
     <div className="space-y-4 pb-20">
@@ -510,22 +414,6 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
         </div>
 
-        {/* Demo Data Seed */}
-        <div className="p-4 flex items-center justify-between">
-          <div className="pr-3">
-            <h3 className="text-xs font-bold text-slate-800 m-0">Load Demo Data</h3>
-            <p className="text-[11px] text-slate-500 m-0 mt-0.5">
-              Load sample parties (Ali Traders, Bilal Traders), invoices, and deposits.
-            </p>
-          </div>
-          <button
-            onClick={seedSampleData}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition shrink-0"
-          >
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            Load Demo
-          </button>
-        </div>
 
         {/* Reset Database */}
         <div className="p-4 flex items-center justify-between">

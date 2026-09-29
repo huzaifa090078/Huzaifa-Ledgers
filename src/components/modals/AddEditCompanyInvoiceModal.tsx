@@ -127,7 +127,7 @@ export const AddEditCompanyInvoiceModal: React.FC<AddEditCompanyInvoiceModalProp
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto flex-1">
+        <form id="company-invoice-form" onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
               {error}
@@ -230,25 +230,26 @@ export const AddEditCompanyInvoiceModal: React.FC<AddEditCompanyInvoiceModalProp
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-
-          <div className="pt-2 flex items-center justify-end space-x-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-xs transition disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : editingInvoice ? 'Update Invoice' : 'Save Invoice'}
-            </button>
-          </div>
         </form>
+
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center space-x-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-2 px-4 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition active:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="company-invoice-form"
+            disabled={loading}
+            className="flex-1 py-2 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-xs transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : editingInvoice ? 'Update Invoice' : 'Save Invoice'}
+          </button>
+        </div>
       </div>
     </div>
   );

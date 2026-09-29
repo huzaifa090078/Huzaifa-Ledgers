@@ -399,7 +399,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                             </span>
                             {entry.companyName && (
                               <span className="text-[9px] font-bold px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
-                                {entry.companyName}
+                                {isInvoice ? entry.companyName : `Paid to: ${entry.companyName}`}
                               </span>
                             )}
                             <span className="text-[10px] text-slate-400 font-mono">

@@ -1646,52 +1646,28 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
     });
   });
 
-  describe('Restored Backup Data Verification', () => {
-    it('verifies that RESTORED_BACKUP_PAYLOAD contains all real business data with exact balances', async () => {
-      const { RESTORED_BACKUP_PAYLOAD } = await import('../src/data/restoredBackupSeed');
-      expect(RESTORED_BACKUP_PAYLOAD.parties).toHaveLength(11);
-      expect(RESTORED_BACKUP_PAYLOAD.companies).toHaveLength(1);
-      expect(RESTORED_BACKUP_PAYLOAD.invoices).toHaveLength(11);
-      expect(RESTORED_BACKUP_PAYLOAD.partyPayments).toHaveLength(24);
-      expect(RESTORED_BACKUP_PAYLOAD.companyPayments).toHaveLength(4);
-      expect(RESTORED_BACKUP_PAYLOAD.companyInvoices).toHaveLength(11);
+  describe('Clean Application State & Database Structure Integrity', () => {
+    it('verifies that fresh application state does not bundle or auto-load unwanted backup/sample records', async () => {
+      let hasSeedModule = false;
+      try {
+        await import('../src/data/restoredBackupSeed');
+        hasSeedModule = true;
+      } catch {
+        hasSeedModule = false;
+      }
+      expect(hasSeedModule).toBe(false);
+    });
 
-      // Verify Total Invoices Sum = Rs 216,210
-      const totalInvoices = RESTORED_BACKUP_PAYLOAD.invoices.reduce((sum, inv) => sum + inv.amount, 0);
-      expect(totalInvoices).toBe(216210);
-
-      // Verify Total Party Payments Sum = Rs 44,000
-      const totalPartyPayments = RESTORED_BACKUP_PAYLOAD.partyPayments.reduce((sum, p) => sum + p.amount, 0);
-      expect(totalPartyPayments).toBe(44000);
-
-      // Net Market Receivable = Rs 172,210
-      expect(totalInvoices - totalPartyPayments).toBe(172210);
-
-      // Verify Company Payables
-      const totalCompanyInvoices = RESTORED_BACKUP_PAYLOAD.companyInvoices.reduce((sum, inv) => sum + inv.amount, 0);
-      expect(totalCompanyInvoices).toBe(216210);
-
-      const totalCompanyPayments = RESTORED_BACKUP_PAYLOAD.companyPayments.reduce((sum, p) => sum + p.amount, 0);
-      expect(totalCompanyPayments).toBe(44000);
-
-      // Net Company Payable = Rs 172,210
-      expect(totalCompanyInvoices - totalCompanyPayments).toBe(172210);
-
-      // Net Difference = 0
-      expect((totalInvoices - totalPartyPayments) - (totalCompanyInvoices - totalCompanyPayments)).toBe(0);
-
-      // Verify bidirectional enrichment on all company invoices
-      RESTORED_BACKUP_PAYLOAD.companyInvoices.forEach(inv => {
-        expect(inv.partyId).toBeTruthy();
-        expect(inv.partyName).toBeTruthy();
-      });
-
-      // Verify companyId on all invoices
-      const companyId = RESTORED_BACKUP_PAYLOAD.companies[0].id;
-      RESTORED_BACKUP_PAYLOAD.invoices.forEach(inv => {
-        expect(inv.companyId).toBe(companyId);
-        expect(inv.companyName).toBe('Hassan Traders Login');
-      });
+    it('verifies that the Dexie application database structure remains intact with all required tables', async () => {
+      const { db } = await import('../src/db');
+      expect(db.parties).toBeDefined();
+      expect(db.invoices).toBeDefined();
+      expect(db.partyPayments).toBeDefined();
+      expect(db.companyPayments).toBeDefined();
+      expect(db.companies).toBeDefined();
+      expect(db.companyInvoices).toBeDefined();
+      expect(db.settings).toBeDefined();
+      expect(db.dailyReconciliations).toBeDefined();
     });
   });
 
@@ -2039,7 +2015,355 @@ describe('Login Smart Technology Ledger - Accounting Engine Tests', () => {
       expect(getRecentTransactions([], [], [], 15)).toHaveLength(0);
     });
   });
+
+  describe('Payment Workflows: Use Case A (General Collection) vs Use Case B (Direct Company Payment)', () => {
+    const partyA: Party = {
+      id: 'party-a',
+      name: 'Customer A',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const partyB: Party = {
+      id: 'party-b',
+      name: 'Customer B',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const compA: Company = {
+      id: 'comp-a',
+      name: 'Company A',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+    const compB: Company = {
+      id: 'comp-b',
+      name: 'Company B',
+      createdAt: '2026-09-25T10:00:00Z',
+      updatedAt: '2026-09-25T10:00:00Z',
+    };
+
+    const parties = [partyA, partyB];
+    const companies = [compA, compB];
+
+    it('Use Case A: General Party Collection isolates business funds from company payables', () => {
+      // Invoices: Customer A has Rs 50,000 invoice, Customer B has Rs 30,000 invoice
+      const invoices: PartyInvoice[] = [
+        {
+          id: 'inv-a',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          companyId: compA.id,
+          companyName: compA.name,
+          invoiceNumber: 'INV-100',
+          amount: 50000,
+          date: '2026-09-25',
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+        {
+          id: 'inv-b',
+          partyId: partyB.id,
+          partyName: partyB.name,
+          companyId: compB.id,
+          companyName: compB.name,
+          invoiceNumber: 'INV-200',
+          amount: 30000,
+          date: '2026-09-25',
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+      ];
+
+      // Customer A pays Rs 15,000 as General Collection (stored in business pool)
+      const partyPayments: PartyPayment[] = [
+        {
+          id: 'pmt-gen-1',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          date: '2026-09-25',
+          amount: 15000,
+          paymentMethod: 'Cash',
+          isDirectCompanyPayment: false,
+          createdAt: '2026-09-25T11:00:00Z',
+          updatedAt: '2026-09-25T11:00:00Z',
+        },
+      ];
+
+      // Verify Customer A balance decreases to Rs 35,000
+      const partyABal = calculatePartyBalance(partyA.id, invoices, partyPayments);
+      expect(partyABal.currentBalance).toBe(35000);
+      expect(partyABal.totalPayments).toBe(15000);
+
+      // Verify Customer B balance is unaffected (Rs 30,000)
+      const partyBBal = calculatePartyBalance(partyB.id, invoices, partyPayments);
+      expect(partyBBal.currentBalance).toBe(30000);
+
+      // Verify Company A payable balance is completely unaffected by general collection (still Rs 50,000)
+      const compABal = calculateSingleCompanyBalance(compA.id, invoices, []);
+      expect(compABal.currentBalance).toBe(50000);
+      expect(compABal.totalPayments).toBe(0);
+
+      // Later, business owner pays Rs 10,000 to Company A from business funds
+      const companyPayments: CompanyPayment[] = [
+        {
+          id: 'cpmt-own-1',
+          companyId: compA.id,
+          companyName: compA.name,
+          date: '2026-09-25',
+          amount: 10000,
+          paymentMethod: 'Bank',
+          isDirectPartyPayment: false,
+          createdAt: '2026-09-25T15:00:00Z',
+          updatedAt: '2026-09-25T15:00:00Z',
+        },
+      ];
+
+      // Company A balance now decreases to Rs 40,000
+      const compABalAfter = calculateSingleCompanyBalance(compA.id, invoices, companyPayments);
+      expect(compABalAfter.currentBalance).toBe(40000);
+      expect(compABalAfter.totalPayments).toBe(10000);
+
+      // Customer A balance is still Rs 35,000 (not affected by company payment)
+      const partyABalAfter = calculatePartyBalance(partyA.id, invoices, partyPayments);
+      expect(partyABalAfter.currentBalance).toBe(35000);
+
+      // Overall analytics check
+      const analytics = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(analytics.marketInvoiced).toBe(80000);
+      expect(analytics.marketRecovered).toBe(15000);
+      expect(analytics.marketReceivable).toBe(65000);
+      expect(analytics.companyLiability).toBe(80000);
+      expect(analytics.companyPaid).toBe(10000);
+      expect(analytics.companyOutstanding).toBe(70000);
+    });
+
+    it('Use Case B: Direct Party Payment to Company simultaneously reduces party and company balance with zero double-counting', () => {
+      // Setup: Customer A purchases Rs 50,000 worth of stock from Company A
+      const invoices: PartyInvoice[] = [
+        {
+          id: 'inv-101',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          companyId: compA.id,
+          companyName: compA.name,
+          invoiceNumber: 'INV-101',
+          amount: 50000,
+          date: '2026-09-25',
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+      ];
+
+      // Initial state: Party owes 50k, Company is owed 50k
+      expect(calculatePartyBalance(partyA.id, invoices, []).currentBalance).toBe(50000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, []).currentBalance).toBe(50000);
+
+      // Customer A pays Rs 10,000 directly given to Company A
+      const linkedPartyPayment: PartyPayment = {
+        id: 'pmt-direct-1',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        companyId: compA.id,
+        companyName: compA.name,
+        isDirectCompanyPayment: true,
+        linkedPaymentId: 'cpmt-direct-1',
+        date: '2026-09-25',
+        amount: 10000,
+        paymentMethod: 'Account',
+        reference: 'DIRECT-SETTLE-01',
+        note: 'Customer paid directly into Company account',
+        createdAt: '2026-09-25T12:00:00Z',
+        updatedAt: '2026-09-25T12:00:00Z',
+      };
+
+      const linkedCompanyPayment: CompanyPayment = {
+        id: 'cpmt-direct-1',
+        companyId: compA.id,
+        companyName: compA.name,
+        partyId: partyA.id,
+        partyName: partyA.name,
+        isDirectPartyPayment: true,
+        linkedPaymentId: 'pmt-direct-1',
+        date: '2026-09-25',
+        amount: 10000,
+        paymentMethod: 'Account',
+        reference: 'DIRECT-SETTLE-01',
+        note: 'Customer paid directly into Company account',
+        createdAt: '2026-09-25T12:00:00Z',
+        updatedAt: '2026-09-25T12:00:00Z',
+      };
+
+      const partyPayments = [linkedPartyPayment];
+      const companyPayments = [linkedCompanyPayment];
+
+      // 1. Verify Customer A balance immediately reduces by Rs 10,000 (from 50,000 to 40,000)
+      const partyBal = calculatePartyBalance(partyA.id, invoices, partyPayments);
+      expect(partyBal.currentBalance).toBe(40000);
+      expect(partyBal.totalPayments).toBe(10000);
+
+      // 2. Verify Company A balance immediately reduces by Rs 10,000 (from 50,000 to 40,000)
+      const compBal = calculateSingleCompanyBalance(compA.id, invoices, companyPayments);
+      expect(compBal.currentBalance).toBe(40000);
+      expect(compBal.totalPayments).toBe(10000);
+
+      // 3. Verify zero double-counting in Dashboard Analytics
+      const analytics = calculateAnalytics(parties, invoices, partyPayments, companyPayments, 'all', undefined, undefined, companies);
+      expect(analytics.marketInvoiced).toBe(50000);
+      expect(analytics.marketRecovered).toBe(10000); // counted exactly once
+      expect(analytics.marketReceivable).toBe(40000);
+      expect(analytics.companyLiability).toBe(50000);
+      expect(analytics.companyPaid).toBe(10000); // counted exactly once
+      expect(analytics.companyOutstanding).toBe(40000);
+      expect(analytics.netOutstandingDifference).toBe(0); // 40k receivable - 40k payable = 0
+
+      // 4. Verify Party Ledger Timeline display
+      const { entries: partyTimeline } = getPartyLedgerTimeline(partyA.id, invoices, partyPayments);
+      expect(partyTimeline).toHaveLength(2); // 1 invoice + 1 payment
+      const partyPaymentEntry = partyTimeline.find((e) => e.type === 'payment');
+      expect(partyPaymentEntry).toBeDefined();
+      expect(partyPaymentEntry?.description).toContain('Payment - Account • Paid to: Company A');
+      expect(partyPaymentEntry?.companyName).toBe('Company A');
+      expect(partyPaymentEntry?.companyId).toBe('comp-a');
+
+      // 5. Verify Company Ledger Timeline display
+      const { entries: compTimeline } = getCompanyLedgerTimeline(compA.id, invoices, companyPayments);
+      expect(compTimeline).toHaveLength(2); // 1 invoice + 1 payment
+      const compPaymentEntry = compTimeline.find((e) => e.type === 'payment');
+      expect(compPaymentEntry).toBeDefined();
+      expect(compPaymentEntry?.description).toContain('Payment received - Account • From: Customer A');
+      expect(compPaymentEntry?.partyName).toBe('Customer A');
+      expect(compPaymentEntry?.partyId).toBe('party-a');
+    });
+
+    it('Use Case B: Editing or deleting linked direct payment updates both ledgers symmetrically', () => {
+      const invoices: PartyInvoice[] = [
+        {
+          id: 'inv-101',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          companyId: compA.id,
+          companyName: compA.name,
+          invoiceNumber: 'INV-101',
+          amount: 50000,
+          date: '2026-09-25',
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+      ];
+
+      let partyPayments: PartyPayment[] = [
+        {
+          id: 'pmt-direct-1',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          companyId: compA.id,
+          companyName: compA.name,
+          isDirectCompanyPayment: true,
+          linkedPaymentId: 'cpmt-direct-1',
+          date: '2026-09-25',
+          amount: 10000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-25T12:00:00Z',
+          updatedAt: '2026-09-25T12:00:00Z',
+        },
+      ];
+
+      let companyPayments: CompanyPayment[] = [
+        {
+          id: 'cpmt-direct-1',
+          companyId: compA.id,
+          companyName: compA.name,
+          partyId: partyA.id,
+          partyName: partyA.name,
+          isDirectPartyPayment: true,
+          linkedPaymentId: 'pmt-direct-1',
+          date: '2026-09-25',
+          amount: 10000,
+          paymentMethod: 'Cash',
+          createdAt: '2026-09-25T12:00:00Z',
+          updatedAt: '2026-09-25T12:00:00Z',
+        },
+      ];
+
+      // Initial: Rs 40k each
+      expect(calculatePartyBalance(partyA.id, invoices, partyPayments).currentBalance).toBe(40000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(40000);
+
+      // EDIT: Change direct payment to Rs 15,000
+      partyPayments = [
+        {
+          ...partyPayments[0],
+          amount: 15000,
+          updatedAt: '2026-09-25T13:00:00Z',
+        },
+      ];
+      companyPayments = [
+        {
+          ...companyPayments[0],
+          amount: 15000,
+          updatedAt: '2026-09-25T13:00:00Z',
+        },
+      ];
+
+      expect(calculatePartyBalance(partyA.id, invoices, partyPayments).currentBalance).toBe(35000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(35000);
+
+      // DELETE: Reversing the direct payment
+      partyPayments = [];
+      companyPayments = [];
+
+      expect(calculatePartyBalance(partyA.id, invoices, partyPayments).currentBalance).toBe(50000);
+      expect(calculateSingleCompanyBalance(compA.id, invoices, companyPayments).currentBalance).toBe(50000);
+    });
+
+    it('supports both Cash and Account payment methods seamlessly', () => {
+      const invoices: PartyInvoice[] = [
+        {
+          id: 'inv-cash-1',
+          partyId: partyA.id,
+          partyName: partyA.name,
+          invoiceNumber: 'INV-1',
+          amount: 20000,
+          date: '2026-09-25',
+          createdAt: '2026-09-25T10:00:00Z',
+          updatedAt: '2026-09-25T10:00:00Z',
+        },
+      ];
+
+      const cashPayment: PartyPayment = {
+        id: 'pmt-cash',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-25',
+        amount: 8000,
+        paymentMethod: 'Cash',
+        createdAt: '2026-09-25T11:00:00Z',
+        updatedAt: '2026-09-25T11:00:00Z',
+      };
+
+      const accountPayment: PartyPayment = {
+        id: 'pmt-acc',
+        partyId: partyA.id,
+        partyName: partyA.name,
+        date: '2026-09-25',
+        amount: 12000,
+        paymentMethod: 'Account',
+        createdAt: '2026-09-25T12:00:00Z',
+        updatedAt: '2026-09-25T12:00:00Z',
+      };
+
+      const partyPayments = [cashPayment, accountPayment];
+      const bal = calculatePartyBalance(partyA.id, invoices, partyPayments);
+      expect(bal.currentBalance).toBe(0);
+      expect(bal.totalPayments).toBe(20000);
+
+      const { entries: timeline } = getPartyLedgerTimeline(partyA.id, invoices, partyPayments);
+      expect(timeline.some((e) => e.description.includes('Cash'))).toBe(true);
+      expect(timeline.some((e) => e.description.includes('Account'))).toBe(true);
+    });
+  });
 });
+
 
 
 

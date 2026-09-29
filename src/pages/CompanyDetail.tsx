@@ -386,11 +386,11 @@ export const CompanyDetail: React.FC<CompanyDetailProps> = ({
                             <span className="text-xs font-bold text-slate-900">
                               {isInvoice
                                 ? `Invoice #${entry.invoiceNumber}`
-                                : `Payment - ${entry.paymentMethod || 'Cash'}`}
+                                : `Payment received - ${entry.paymentMethod || 'Cash'}`}
                             </span>
                             {entry.partyName && (
                               <span className="text-[9px] font-bold px-1.5 py-0.2 bg-sky-50 text-sky-700 rounded-md border border-sky-100">
-                                Party: {entry.partyName}
+                                {isInvoice ? `Party: ${entry.partyName}` : `From: ${entry.partyName}`}
                               </span>
                             )}
                             <span className="text-[10px] text-slate-400 font-mono">

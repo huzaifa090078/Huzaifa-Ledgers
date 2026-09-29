@@ -292,10 +292,14 @@ export function getPartyLedgerTimeline(
         id: pmt.id,
         date: pmt.date,
         type: 'payment',
-        description: `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
+        description: pmt.companyName
+          ? `Payment - ${pmt.paymentMethod} • Paid to: ${pmt.companyName}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`
+          : `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
         debit: 0,
         credit,
         balance: runningBalance,
+        companyId: pmt.companyId,
+        companyName: pmt.companyName,
         paymentMethod: pmt.paymentMethod,
         rawItem: pmt,
       };
@@ -420,11 +424,15 @@ export function calculateSingleCompanyBalance(
   allPayments: (PartyPayment | CompanyPayment)[]
 ): IndividualCompanyBalanceSummary {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
-  // Strict Rule: Party Payments belong ONLY to parties and must NEVER affect Company balance.
-  // Only genuine CompanyPayment records (which do not have a partyId) reduce company balance.
-  const companyPayments = allPayments.filter(
-    (pmt) => pmt.companyId === companyId && !('partyId' in pmt && (pmt as any).partyId)
-  );
+  // Company payments include normal company payments and direct party-to-company payments.
+  // Pure party-only payments (from partyPayments without direct company payment flag) do NOT reduce company balance.
+  const companyPayments = allPayments.filter((pmt) => {
+    if (pmt.companyId !== companyId) return false;
+    if ('partyId' in pmt && (pmt as any).partyId && !(pmt as any).isDirectPartyPayment && !(pmt as any).isDirectCompanyPayment) {
+      return false;
+    }
+    return true;
+  });
 
   const totalInvoices = companyInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const totalPayments = companyPayments.reduce((sum, pmt) => sum + (Number(pmt.amount) || 0), 0);
@@ -464,10 +472,13 @@ export function getCompanyLedgerTimeline(
   allPayments: (PartyPayment | CompanyPayment)[]
 ): { entries: CompanyLedgerEntry[]; finalBalance: number; totalDebit: number; totalCredit: number } {
   const companyInvoices = allInvoices.filter((inv) => inv.companyId === companyId);
-  // Strict Rule: Party Payments belong ONLY to parties and must NEVER appear in Company Ledger.
-  const companyPayments = allPayments.filter(
-    (pmt) => pmt.companyId === companyId && !('partyId' in pmt && (pmt as any).partyId)
-  );
+  const companyPayments = allPayments.filter((pmt) => {
+    if (pmt.companyId !== companyId) return false;
+    if ('partyId' in pmt && (pmt as any).partyId && !(pmt as any).isDirectPartyPayment && !(pmt as any).isDirectCompanyPayment) {
+      return false;
+    }
+    return true;
+  });
 
   type RawCompanyItem =
     | { kind: 'inv'; data: PartyInvoice | CompanyInvoice; date: string; time: string }
@@ -530,16 +541,22 @@ export function getCompanyLedgerTimeline(
       const credit = Number(pmt.amount) || 0;
       totalCredit += credit;
       runningBalance -= credit;
+      const partyName = (pmt as any).partyName;
+      const partyId = (pmt as any).partyId;
       return {
         id: pmt.id,
         date: pmt.date,
         type: 'payment',
-        description: `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
+        description: partyName
+          ? `Payment received - ${pmt.paymentMethod} • From: ${partyName}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`
+          : `Payment - ${pmt.paymentMethod}${pmt.reference ? ` (Ref: ${pmt.reference})` : ''}${pmt.note ? ` - ${pmt.note}` : ''}`,
         debit: 0,
         credit,
         balance: runningBalance,
         companyId: pmt.companyId,
         companyName: pmt.companyName,
+        partyId,
+        partyName,
         paymentMethod: pmt.paymentMethod,
         rawItem: pmt,
       };

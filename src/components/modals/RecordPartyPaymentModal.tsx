@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, CheckCircle2, User, Search, Check } from 'lucide-react';
+import { X, CheckCircle2, User, Search, Check, Wallet, ArrowRightLeft } from 'lucide-react';
 import type { Party, Company, PartyInvoice, PartyPayment, PartyPaymentMethod } from '../../types';
 import { generateId } from '../../db';
 import { getTodayDateString, formatPKR } from '../../services/accounting';
@@ -17,7 +17,7 @@ interface RecordPartyPaymentModalProps {
   editingPayment?: PartyPayment | null;
 }
 
-const PAYMENT_METHODS: PartyPaymentMethod[] = ['Cash', 'Bank', 'Easypaisa', 'JazzCash', 'Other'];
+const PAYMENT_METHODS: PartyPaymentMethod[] = ['Cash', 'Account', 'Bank', 'Easypaisa', 'JazzCash', 'Other'];
 
 export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = ({
   isOpen,
@@ -30,6 +30,7 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
   defaultCompanyId,
   editingPayment,
 }) => {
+  const [workflow, setWorkflow] = useState<'general' | 'direct'>('general');
   const [partyId, setPartyId] = useState(defaultPartyId || '');
   const [partySearch, setPartySearch] = useState('');
   const [isPartyDropdownOpen, setIsPartyDropdownOpen] = useState(false);
@@ -58,6 +59,8 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
 
   useEffect(() => {
     if (editingPayment) {
+      const isDirect = Boolean(editingPayment.isDirectCompanyPayment || editingPayment.companyId);
+      setWorkflow(isDirect ? 'direct' : 'general');
       setPartyId(editingPayment.partyId);
       const foundParty = parties.find((p) => p.id === editingPayment.partyId);
       setPartySearch(foundParty ? foundParty.name : editingPayment.partyName);
@@ -72,7 +75,15 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
       setPartyId(initialPartyId);
       const foundParty = parties.find((p) => p.id === initialPartyId);
       setPartySearch(foundParty ? foundParty.name : '');
-      setCompanyId(defaultCompanyId || '');
+
+      if (defaultCompanyId) {
+        setWorkflow('direct');
+        setCompanyId(defaultCompanyId);
+      } else {
+        setWorkflow('general');
+        setCompanyId('');
+      }
+
       setDate(getTodayDateString());
       setAmount('');
       setPaymentMethod('Cash');
@@ -100,7 +111,9 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
 
   const handlePartyChange = (newPartyId: string) => {
     setPartyId(newPartyId);
-    setCompanyId('');
+    if (workflow === 'general') {
+      setCompanyId('');
+    }
   };
 
   // Filter parties by search query
@@ -163,7 +176,13 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
       return;
     }
 
+    if (workflow === 'direct' && !companyId) {
+      setError('Please select the company that received this payment.');
+      return;
+    }
+
     const selectedCompany = companies.find((c) => c.id === companyId);
+    const isDirect = workflow === 'direct';
 
     try {
       setLoading(true);
@@ -172,8 +191,10 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
         id: editingPayment ? editingPayment.id : generateId(),
         partyId,
         partyName: selectedParty.name,
-        companyId: companyId || undefined,
-        companyName: selectedCompany ? selectedCompany.name : undefined,
+        companyId: isDirect && companyId ? companyId : undefined,
+        companyName: isDirect && selectedCompany ? selectedCompany.name : undefined,
+        isDirectCompanyPayment: isDirect,
+        linkedPaymentId: editingPayment ? editingPayment.linkedPaymentId : undefined,
         date: date || getTodayDateString(),
         amount: Math.round(numAmount),
         paymentMethod,
@@ -196,41 +217,86 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto max-h-[90dvh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             <h2 className="text-base font-semibold text-slate-800 m-0">
-              {editingPayment ? 'Edit Payment' : 'Record Payment'}
+              {editingPayment ? 'Edit Payment' : 'Record Party Payment'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-full active:bg-slate-200"
+            className="text-slate-400 hover:text-slate-600 p-1 rounded-full active:bg-slate-200 transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto flex-1">
+        {/* Scrollable Form Body */}
+        <form id="party-payment-form" onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 text-xs bg-red-50 text-red-700 rounded-lg border border-red-200">
               {error}
             </div>
           )}
 
-          {/* Party Notice */}
-          <div className="flex items-start p-2.5 bg-emerald-50/80 border border-emerald-200/80 rounded-lg text-xs text-emerald-950">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
-            <span>
-              This payment reduces the <strong>Party's Amount Due</strong>. Company balances are not affected.
-            </span>
+          {/* Workflow Selector Tabs */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Payment Flow / Purpose
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setWorkflow('general')}
+                className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-lg text-xs font-semibold transition ${
+                  workflow === 'general'
+                    ? 'bg-white text-emerald-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Wallet className="w-4 h-4 text-emerald-600" />
+                <span>General Collection</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setWorkflow('direct')}
+                className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-lg text-xs font-semibold transition ${
+                  workflow === 'direct'
+                    ? 'bg-white text-indigo-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                <span>Direct to Company</span>
+              </button>
+            </div>
           </div>
+
+          {/* Workflow Explanatory Banner */}
+          {workflow === 'general' ? (
+            <div className="flex items-start p-2.5 bg-emerald-50/80 border border-emerald-200/80 rounded-lg text-xs text-emerald-950">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
+              <span>
+                <strong>General Collection:</strong> Reduces the customer's balance into your business collection pool. Company payable balances remain untouched.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-start p-2.5 bg-indigo-50/80 border border-indigo-200/80 rounded-lg text-xs text-indigo-950">
+              <ArrowRightLeft className="w-4 h-4 text-indigo-600 mr-2 shrink-0 mt-0.5" />
+              <span>
+                <strong>Direct Company Payment:</strong> Paid directly to a supplier. This will <strong>simultaneously reduce customer balance</strong> AND <strong>reduce company payable balance</strong> with zero double-counting.
+              </span>
+            </div>
+          )}
 
           {/* Party Selection with Autocomplete */}
           <div ref={dropdownRef} className="relative">
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Select Party / Customer <span className="text-red-500">*</span>
+              Select Customer / Party <span className="text-red-500">*</span>
             </label>
             {defaultPartyId && selectedPartyObj && !editingPayment ? (
               <div className="flex items-center space-x-2 p-2 bg-slate-100 rounded-lg border border-slate-200">
@@ -307,19 +373,20 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
             )}
           </div>
 
-          {/* Company Selection - Just Company Name, No Invoice Number, No Balance */}
-          {relevantCompanies.length > 0 && (
+          {/* Company Selection - Required for Direct to Company workflow */}
+          {workflow === 'direct' && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Company / Supplier (Optional)
+                Recipient Company / Supplier <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  required
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">General Account Payment (Unlinked)</option>
+                  <option value="">Select Company to pay...</option>
                   {relevantCompanies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -330,6 +397,7 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
             </div>
           )}
 
+          {/* Amount and Date Fields */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -368,6 +436,7 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
             </div>
           </div>
 
+          {/* Payment Method */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Payment Method <span className="text-red-500">*</span>
@@ -390,6 +459,7 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
             </div>
           </div>
 
+          {/* Reference */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Reference / Cheque # (Optional)
@@ -403,6 +473,7 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
             />
           </div>
 
+          {/* Note */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Payment Note (Optional)
@@ -411,28 +482,30 @@ export const RecordPartyPaymentModal: React.FC<RecordPartyPaymentModalProps> = (
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Received via collection boy"
+              placeholder="e.g. Received via collection boy / direct cash to company"
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
             />
           </div>
-
-          <div className="pt-2 flex items-center space-x-3 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 px-4 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition active:bg-slate-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-2 px-4 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-xs transition disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : editingPayment ? 'Save Changes' : 'Record Payment'}
-            </button>
-          </div>
         </form>
+
+        {/* Pinned Action Bar at Bottom (Accessible while keyboard is open) */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center space-x-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2 px-4 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition active:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="party-payment-form"
+            disabled={loading}
+            className="flex-1 py-2 px-4 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-xs transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : editingPayment ? 'Save Changes' : 'Record Payment'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -21,15 +21,16 @@ export interface PartyInvoice {
   updatedAt: string;
 }
 
-export type PartyPaymentMethod = 'Cash' | 'Bank' | 'Easypaisa' | 'JazzCash' | 'Other';
+export type PartyPaymentMethod = 'Cash' | 'Account' | 'Bank' | 'Easypaisa' | 'JazzCash' | 'Other';
 
 export interface PartyPayment {
   id: string;
   partyId: string;
   partyName: string;
-  /** @deprecated Kept for historical backup compatibility; Party Payment has ONLY a Party relationship */
   companyId?: string;
   companyName?: string;
+  isDirectCompanyPayment?: boolean;
+  linkedPaymentId?: string; // ID of linked CompanyPayment (for direct Party -> Company payment)
   invoiceId?: string;
   invoiceNumber?: string;
   date: string; // YYYY-MM-DD
@@ -41,7 +42,7 @@ export interface PartyPayment {
   updatedAt: string;
 }
 
-export type CompanyPaymentMethod = 'Cash' | 'Bank' | 'Easypaisa' | 'JazzCash' | 'Other';
+export type CompanyPaymentMethod = 'Cash' | 'Account' | 'Bank' | 'Easypaisa' | 'JazzCash' | 'Other';
 
 export interface Company {
   id: string;
@@ -70,6 +71,10 @@ export interface CompanyPayment {
   id: string;
   companyId?: string;
   companyName?: string;
+  partyId?: string; // Source party ID (for direct Party -> Company payment)
+  partyName?: string; // Source party name
+  isDirectPartyPayment?: boolean;
+  linkedPaymentId?: string; // ID of linked PartyPayment
   date: string; // YYYY-MM-DD
   amount: number;
   paymentMethod: CompanyPaymentMethod;

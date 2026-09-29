@@ -83,7 +83,7 @@ export const AddEditPartyModal: React.FC<AddEditPartyModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form id="party-form" onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 text-xs bg-red-50 text-red-700 rounded-lg border border-red-200">
               {error}
@@ -142,24 +142,25 @@ export const AddEditPartyModal: React.FC<AddEditPartyModalProps> = ({
               />
             </div>
           </div>
-
-          <div className="pt-2 flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 px-4 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition active:bg-slate-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-2.5 px-4 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 active:bg-sky-800 rounded-lg shadow-xs transition disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : editingParty ? 'Save Changes' : 'Create Party'}
-            </button>
-          </div>
         </form>
+
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center space-x-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition active:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="party-form"
+            disabled={loading}
+            className="flex-1 py-2.5 px-4 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 active:bg-sky-800 rounded-lg shadow-xs transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : editingParty ? 'Save Changes' : 'Create Party'}
+          </button>
+        </div>
       </div>
     </div>
   );
